@@ -54,6 +54,9 @@ class CustomerController extends Controller
      */
     public function show(Customer $customer)
     {
+
+        $customer = $customer->with(['transactions'])->find($customer->id);
+
         // return a response
         return response()->json([
             'status' => 'success',

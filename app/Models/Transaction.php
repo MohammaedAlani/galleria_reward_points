@@ -21,8 +21,21 @@ class Transaction extends Model
         'transaction_status',
     ];
 
+    protected $with = [
+        'addByUser',
+        'approvedByUser',
+    ];
+
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function addByUser(){
+        return $this->belongsTo(User::class, 'add_by');
+    }
+
+    public function approvedByUser(){
+        return $this->belongsTo(User::class, 'approved_by');
     }
 }
