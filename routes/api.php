@@ -18,8 +18,7 @@ Route::prefix('v1')->group(function () {
         Route::post('transactions/approval/{transaction}/{status}', [TransactionController::class, 'approval']);
         Route::post('transactions', [TransactionController::class, 'addTransaction']);
         Route::post('transactions/use', [TransactionController::class, 'useTransaction']);
+        Route::post('transactions/return', [TransactionController::class, 'returnTransaction']);
     });
 
-//    Route::apiResource('transactions', 'TransactionController');
-//    Route::apiResource('users', 'UserController');
 });
