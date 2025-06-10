@@ -67,15 +67,10 @@ class TransactionController extends Controller
 
                     case 'use':
                         // Deduct points from customer
-                        $pointsToDeduct = $transaction->transaction_amount * config('points.points_per_iqd');
+                        $pointsToDeduct = $transaction->transaction_amount * config('points.points_per_use');
 
                         // Double-check if customer still has enough points
-                        if ($customer->total_points < $pointsToDeduct) {
-                            // Reject the transaction if not enough points
-                            $transaction->update([
-                                'transaction_status' => 'rejected',
-                            ]);
-
+                        if ($customer->total_points_can_use < $pointsToDeduct) {
                             return response()->json([
                                 'status' => 'error',
                                 'message' => 'Not enough points to use.',
@@ -166,14 +161,14 @@ class TransactionController extends Controller
 
             // Check if customer has enough points before creating transaction
             $customer = \App\Models\Customer::find($validatedData['customer_id']);
-            $pointsPerIqd = config('points.points_per_iqd');
+            $pointsPerIqd = config('points.points_per_use');
             // 2000 / 100 = 20 points
             $requiredPoints = $validatedData['transaction_amount'] * $pointsPerIqd;
 
-            if ($customer->total_points < $requiredPoints) {
+            if ($customer->total_points_can_use < $requiredPoints) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Not enough points to use. Required: ' . $requiredPoints . ', Available: ' . $customer->total_points,
+                    'message' => 'Not enough points to use. Required: ' . $requiredPoints . ', Available: ' . $customer->total_points_can_use,
                 ], 400);
             }
 

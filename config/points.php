@@ -6,4 +6,7 @@ return [
 
     // Use Points this will be multiplied by 4
     'iqd_per_point' => env('IQD_PER_POINT', 4),
+
+    // Points for each transaction
+    'points_per_use' => env('POINTS_PER_USE', 0.25),
 ];
