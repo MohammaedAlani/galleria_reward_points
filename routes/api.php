@@ -16,8 +16,13 @@ Route::prefix('v1')->group(function () {
         Route::get('user', [AuthController::class, 'index']);
 
         Route::apiResource('customers', CustomerController::class);
+
+        // Transaction routes
         Route::get('transactions', [TransactionController::class, 'index']);
+        Route::get('transactions/pending', [TransactionController::class, 'pendingTransactions']);
         Route::post('transactions/approval/{transaction}/{status}', [TransactionController::class, 'approval']);
+        Route::post('transactions/bulk-approve', [TransactionController::class, 'bulkApprove']);
+        Route::post('transactions/bulk-reject', [TransactionController::class, 'bulkReject']);
         Route::post('transactions', [TransactionController::class, 'addTransaction']);
         Route::post('transactions/use', [TransactionController::class, 'useTransaction']);
         Route::post('transactions/return', [TransactionController::class, 'returnTransaction']);
