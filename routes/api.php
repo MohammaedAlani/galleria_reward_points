@@ -6,7 +6,6 @@ use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
-
     Route::prefix('auth')->group(function () {
         Route::post('login', [AuthController::class, 'login']);
         Route::post('logout', [AuthController::class, 'logout']);
@@ -23,5 +22,4 @@ Route::prefix('v1')->group(function () {
         Route::post('transactions/use', [TransactionController::class, 'useTransaction']);
         Route::post('transactions/return', [TransactionController::class, 'returnTransaction']);
     });
-
 });

@@ -167,7 +167,7 @@ class TransactionController extends Controller
 
             // Check if customer has enough points before creating transaction
             $customer = \App\Models\Customer::find($validatedData['customer_id']);
-            $pointsPerIqd = config('points.points_per_iqd');
+            $pointsPerIqd = config('points.iqd_per_point');
             $requiredPoints = $validatedData['transaction_amount'] * $pointsPerIqd;
 
             if ($customer->total_points < $requiredPoints) {
