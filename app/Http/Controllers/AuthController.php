@@ -61,4 +61,14 @@ class AuthController extends Controller
         ]);
     }
 
+    public function index()
+    {
+        $users = User::orderBy('name', 'asc')->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $users,
+        ]);
+    }
+
 }
