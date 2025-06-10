@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Customer;
+use App\Models\Transaction;
 use Illuminate\Http\Request;
 
 class CustomerController extends Controller
@@ -100,6 +101,16 @@ class CustomerController extends Controller
      */
     public function destroy(Customer $customer)
     {
-        //
+        // delete the customer transactions
+        $transactions = Transaction::where('customer_id', $customer->id)->delete();
+
+        // delete the customer
+        $customer->delete();
+
+        // return a response
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Customer deleted successfully.',
+        ]);
     }
 }
