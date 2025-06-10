@@ -48,7 +48,6 @@ jobs:
       - name: Migrate database and Add Permissions
         run: |
           ssh -o StrictHostKeyChecking=no -p 22 root@5.75.190.46 "cd /var/www/html/galleria_reward_points && php artisan migrate --force"
-          ssh -o StrictHostKeyChecking=no -p 22 root@5.75.190.46 "cd /var/www/html/galleria_reward_points && php artisan app:add-permissions-to-users"
           # Restart supervisor if it's installed (ignore error if not installed)
           ssh -o StrictHostKeyChecking=no -p 22 root@5.75.190.46 "systemctl restart supervisor || true"
 
