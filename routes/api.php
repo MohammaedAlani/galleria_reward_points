@@ -13,6 +13,8 @@ Route::prefix('v1')->group(function () {
     });
 
     Route::group(['middleware' => ['auth:sanctum']], function () {
+        Route::post('user/create', [AuthController::class, 'create']);
+
         Route::apiResource('customers', CustomerController::class);
         Route::get('transactions', [TransactionController::class, 'index']);
         Route::post('transactions/approval/{transaction}/{status}', [TransactionController::class, 'approval']);
