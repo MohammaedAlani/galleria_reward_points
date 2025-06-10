@@ -51,7 +51,7 @@ class Customer extends Model
      */
     public function getPointsAmountAttribute(): float
     {
-        return $this->total_spent * config('points.points_per_iqd');
+        return $this->total_points_can_use * config('points.iqd_per_point', 4);
     }
 
     public function transactions()

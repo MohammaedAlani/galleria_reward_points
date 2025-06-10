@@ -75,9 +75,24 @@ class CustomerController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateCustomerRequest $request, Customer $customer)
+    public function update(Request $request, Customer $customer)
     {
-        //
+        // validate the request
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'phone' => 'required|string|max:20',
+            'address' => 'nullable|string|max:255',
+            'card_number' => 'nullable|string|max:50',
+        ]);
+
+        // update the customer
+        $customer->update($request->all());
+
+        // return a response
+        return response()->json([
+            'status' => 'success',
+            'data' => $customer,
+        ]);
     }
 
     /**
