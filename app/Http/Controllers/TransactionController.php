@@ -67,7 +67,7 @@ class TransactionController extends Controller
 
                     case 'use':
                         // Deduct points from customer
-                        $pointsToDeduct = $transaction->transaction_amount * config('points.iqd_per_point');
+                        $pointsToDeduct = $transaction->transaction_amount * config('points.points_per_iqd');
 
                         // Double-check if customer still has enough points
                         if ($customer->total_points < $pointsToDeduct) {
