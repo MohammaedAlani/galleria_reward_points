@@ -55,12 +55,11 @@ class TransactionController extends Controller
             // If approved, update the customer's points based on transaction type
             if ($status === 'approved') {
                 $customer = $transaction->customer;
-                $pointsPerIqd = config('points.points_per_iqd');
 
                 switch ($transaction->transaction_type) {
                     case 'add':
                         // Add points to customer
-                        $pointsToAdd = $transaction->transaction_amount * $pointsPerIqd;
+                        $pointsToAdd = $transaction->transaction_amount * config('points.points_per_iqd');
                         $customer->total_points += $pointsToAdd;
                         $customer->last_transaction_date = now();
                         $customer->last_transaction_amount = $transaction->transaction_amount;
@@ -68,7 +67,7 @@ class TransactionController extends Controller
 
                     case 'use':
                         // Deduct points from customer
-                        $pointsToDeduct = $transaction->transaction_amount * $pointsPerIqd;
+                        $pointsToDeduct = $transaction->transaction_amount * config('points.iqd_per_point');
 
                         // Double-check if customer still has enough points
                         if ($customer->total_points < $pointsToDeduct) {
@@ -83,7 +82,7 @@ class TransactionController extends Controller
                             ], 400);
                         }
 
-                        $customer->total_points -= $pointsToDeduct;
+                        $customer->total_spent += $pointsToDeduct;
                         $customer->last_transaction_date = now();
                         $customer->last_transaction_amount = -$transaction->transaction_amount; // Negative for usage
                         break;
@@ -91,8 +90,8 @@ class TransactionController extends Controller
                     case 'return':
                         // This shouldn't happen as returns are auto-approved
                         // But handling it for completeness
-                        $pointsToReturn = $transaction->transaction_amount * $pointsPerIqd;
-                        $customer->total_points += $pointsToReturn;
+                        $pointsToReturn = $transaction->transaction_amount * config('points.iqd_per_point');
+                        $customer->total_points -= $pointsToReturn;
                         $customer->last_transaction_date = now();
                         $customer->last_transaction_amount = $transaction->transaction_amount;
                         break;
