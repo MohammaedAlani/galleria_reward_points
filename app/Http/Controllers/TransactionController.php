@@ -150,13 +150,14 @@ class TransactionController extends Controller
             $requiredPoints = $validatedData['transaction_amount'] * $pointsPerIqd;
 
             if ($customer->total_points_can_use < $requiredPoints) {
-                $customer->total_spent += $requiredPoints;
-                $customer->save();
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Not enough points to use. Required: ' . $requiredPoints . ', Available: ' . $customer->total_points_can_use,
                 ], 400);
             }
+
+            $customer->total_spent += $requiredPoints;
+            $customer->save();
 
             $transaction = Transaction::create($validatedData);
 
