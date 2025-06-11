@@ -138,7 +138,7 @@ class TransactionController extends Controller
         return DB::transaction(function () use ($validatedData) {
             $userId = auth()->id();
             $validatedData['add_by'] = $userId;
-            $validatedData['transaction_status'] = 'pending';
+            $validatedData['transaction_status'] = 'approved'; // Set to approved for now, will be updated during approval
             $validatedData['transaction_type'] = 'use';
             // Don't set approved_by yet - will be set during approval
             $validatedData['transaction_date'] = now();
@@ -150,6 +150,7 @@ class TransactionController extends Controller
             $requiredPoints = $validatedData['transaction_amount'] * $pointsPerIqd;
 
             if ($customer->total_points_can_use < $requiredPoints) {
+                $customer->total_spent += $requiredPoints;
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Not enough points to use. Required: ' . $requiredPoints . ', Available: ' . $customer->total_points_can_use,
