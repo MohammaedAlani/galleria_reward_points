@@ -151,6 +151,7 @@ class TransactionController extends Controller
 
             if ($customer->total_points_can_use < $requiredPoints) {
                 $customer->total_spent += $requiredPoints;
+                $customer->save();
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Not enough points to use. Required: ' . $requiredPoints . ', Available: ' . $customer->total_points_can_use,
