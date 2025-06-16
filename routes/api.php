@@ -17,7 +17,12 @@ Route::prefix('v1')->group(function () {
 
         Route::apiResource('customers', CustomerController::class);
 
-        // Transaction routes
+        // ADD THESE NEW ROUTES FOR ENHANCED CUSTOMER FUNCTIONALITY:
+        Route::get('customers/analytics', [CustomerController::class, 'analytics']);
+        Route::get('customers/export', [CustomerController::class, 'export']);
+        Route::post('customers/bulk-action', [CustomerController::class, 'bulkAction']);
+
+        // Transaction routes (existing)
         Route::get('transactions', [TransactionController::class, 'index']);
         Route::get('transactions/pending', [TransactionController::class, 'pendingTransactions']);
         Route::post('transactions/approval/{transaction}/{status}', [TransactionController::class, 'approval']);
@@ -26,5 +31,26 @@ Route::prefix('v1')->group(function () {
         Route::post('transactions', [TransactionController::class, 'addTransaction']);
         Route::post('transactions/use', [TransactionController::class, 'useTransaction']);
         Route::post('transactions/return', [TransactionController::class, 'returnTransaction']);
+
+        // ADD THESE NEW ROUTES FOR ENHANCED TRANSACTION FUNCTIONALITY:
+        Route::get('transactions/analytics', [TransactionController::class, 'analytics']);
+        Route::get('transactions/export', [TransactionController::class, 'export']);
     });
 });
+
+/*
+ * IMPORTANT: Route Order Matters!
+ *
+ * Make sure to place specific routes BEFORE the resource routes to avoid conflicts.
+ * For example, 'customers/analytics' should come before 'customers/{customer}'
+ *
+ * If you're getting route conflicts, rearrange like this:
+ *
+ * // Specific routes first
+ * Route::get('customers/analytics', [CustomerController::class, 'analytics']);
+ * Route::get('customers/export', [CustomerController::class, 'export']);
+ * Route::post('customers/bulk-action', [CustomerController::class, 'bulkAction']);
+ *
+ * // Resource routes last
+ * Route::apiResource('customers', CustomerController::class);
+ */
