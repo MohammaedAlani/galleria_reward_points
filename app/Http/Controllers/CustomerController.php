@@ -53,10 +53,12 @@ class CustomerController extends Controller
     /**
      * Display the specified resource.
      */
+
     public function show(Customer $customer)
     {
-
-        $customer = $customer->with(['transactions'])->find($customer->id);
+        $customer = $customer->with(['transactions' => function($query) {
+            $query->orderBy('created_at', 'desc')->limit(25);
+        }])->find($customer->id);
 
         // return a response
         return response()->json([
