@@ -97,7 +97,6 @@ class CustomerController extends Controller
                 'phone' => $request->phone,
                 'address' => $request->address,
                 'card_number' => $request->card_number,
-                'email' => $request->email,
                 'date_of_birth' => $request->date_of_birth,
                 'gender' => $request->gender,
                 'notes' => $request->notes,
@@ -133,7 +132,6 @@ class CustomerController extends Controller
             'phone' => 'required|string|max:20|unique:customers,phone,' . $customer->id,
             'address' => 'nullable|string|max:255',
             'card_number' => 'nullable|string|max:50|unique:customers,card_number,' . $customer->id,
-            'email' => 'nullable|email|max:255',
             'date_of_birth' => 'nullable|date',
             'gender' => 'nullable|in:male,female',
             'notes' => 'nullable|string|max:1000',
@@ -221,7 +219,7 @@ class CustomerController extends Controller
 
         $csvData = [];
         $csvData[] = [
-            'ID', 'Name', 'Phone', 'Email', 'Address', 'Card Number',
+            'ID', 'Name', 'Phone', 'Address', 'Card Number',
             'Total Points', 'Available Points', 'Used Points', 'Points Value (IQD)',
             'Total Transactions', 'Last Transaction Date', 'Last Transaction Amount',
             'Customer Status', 'Registration Date', 'Gender', 'Date of Birth', 'Notes'
@@ -232,7 +230,6 @@ class CustomerController extends Controller
                 $customer->id,
                 $customer->name,
                 $customer->phone,
-                $customer->email ?? 'N/A',
                 $customer->address ?? 'N/A',
                 $customer->card_number ?? 'N/A',
                 $customer->total_points,
@@ -360,8 +357,7 @@ class CustomerController extends Controller
                 $q->where('name', 'like', "%{$searchTerm}%")
                     ->orWhere('phone', 'like', "%{$searchTerm}%")
                     ->orWhere('address', 'like', "%{$searchTerm}%")
-                    ->orWhere('card_number', 'like', "%{$searchTerm}%")
-                    ->orWhere('email', 'like', "%{$searchTerm}%");
+                    ->orWhere('card_number', 'like', "%{$searchTerm}%");
             });
         }
 
