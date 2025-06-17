@@ -516,18 +516,34 @@ class CustomerController extends Controller
             ]);
         });
     }
+
+
     /**
-     * Enhanced bulk operations
+     * Enhanced bulk action method with debugging
      */
     public function bulkAction(Request $request)
     {
+        // Debug logging
+        Log::info('Bulk action called', [
+            'request_data' => $request->all(),
+            'user_id' => auth()->id(),
+            'route_name' => request()->route()->getName(),
+            'route_uri' => request()->route()->uri()
+        ]);
+
+        // Validate request
         $validator = Validator::make($request->all(), [
-            'action' => 'required|in:delete,export,archive,restore',
+            'action' => 'required|in:delete,export,archive,restore,update_status',
             'customer_ids' => 'required|array|min:1|max:100',
-            'customer_ids.*' => 'exists:customers,id'
+            'customer_ids.*' => 'integer|exists:customers,id'
         ]);
 
         if ($validator->fails()) {
+            Log::warning('Bulk action validation failed', [
+                'errors' => $validator->errors(),
+                'request' => $request->all()
+            ]);
+
             return response()->json([
                 'status' => 'error',
                 'message' => 'بيانات غير صحيحة',
@@ -536,33 +552,217 @@ class CustomerController extends Controller
         }
 
         try {
+            // Check if customers exist
+            $existingCustomers = Customer::whereIn('id', $request->customer_ids)->count();
+            if ($existingCustomers !== count($request->customer_ids)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'بعض الزبائن المحددين غير موجودين',
+                    'found' => $existingCustomers,
+                    'requested' => count($request->customer_ids)
+                ], 422);
+            }
+
             switch ($request->action) {
                 case 'delete':
-                    return $this->bulkDelete($request->customer_ids);
+                    return $this->performBulkDelete($request->customer_ids);
+
                 case 'export':
-                    return $this->bulkExport($request->customer_ids);
+                    return $this->performBulkExport($request->customer_ids);
+
                 case 'archive':
-                    return $this->bulkArchive($request->customer_ids);
+                    return $this->performBulkArchive($request->customer_ids);
+
                 case 'restore':
-                    return $this->bulkRestore($request->customer_ids);
+                    return $this->performBulkRestore($request->customer_ids);
+
                 default:
                     return response()->json([
                         'status' => 'error',
-                        'message' => 'إجراء غير مدعوم'
+                        'message' => 'إجراء غير مدعوم: ' . $request->action
                     ], 422);
             }
+
         } catch (\Exception $e) {
             Log::error('Bulk action error: ' . $e->getMessage(), [
                 'action' => $request->action,
                 'customer_ids' => $request->customer_ids,
-                'user_id' => auth()->id()
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
             ]);
 
             return response()->json([
                 'status' => 'error',
-                'message' => 'فشل في تنفيذ العملية المجمعة'
+                'message' => 'فشل في تنفيذ العملية المجمعة: ' . $e->getMessage(),
+                'debug' => config('app.debug') ? [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getTraceAsString()
+                ] : null
             ], 500);
         }
+    }
+
+    /**
+     * Perform bulk delete operation
+     */
+    private function performBulkDelete($customerIds)
+    {
+        $results = [
+            'successful' => [],
+            'failed' => [],
+            'skipped' => []
+        ];
+
+        DB::beginTransaction();
+        try {
+            foreach ($customerIds as $customerId) {
+                try {
+                    $customer = Customer::findOrFail($customerId);
+
+                    // Check for pending transactions
+                    $pendingCount = Transaction::where('customer_id', $customerId)
+                        ->where('transaction_status', 'pending')
+                        ->count();
+
+                    if ($pendingCount > 0) {
+                        $results['skipped'][] = [
+                            'id' => $customerId,
+                            'name' => $customer->name,
+                            'reason' => "يحتوي على {$pendingCount} معاملة معلقة"
+                        ];
+                        continue;
+                    }
+
+                    // Check high value customer
+                    $pointsThreshold = config('points.high_value_customer_threshold', 5000);
+                    if ($customer->total_points >= $pointsThreshold) {
+                        $results['skipped'][] = [
+                            'id' => $customerId,
+                            'name' => $customer->name,
+                            'reason' => 'زبون ذو قيمة عالية (يتطلب موافقة إدارية)'
+                        ];
+                        continue;
+                    }
+
+                    // Delete transactions and customer
+                    Transaction::where('customer_id', $customerId)->delete();
+                    $customer->delete();
+
+                    $results['successful'][] = [
+                        'id' => $customerId,
+                        'name' => $customer->name
+                    ];
+
+                    Log::info('Customer deleted via bulk action', [
+                        'customer_id' => $customerId,
+                        'customer_name' => $customer->name,
+                        'deleted_by' => auth()->id()
+                    ]);
+
+                } catch (\Exception $e) {
+                    $results['failed'][] = [
+                        'id' => $customerId,
+                        'reason' => $e->getMessage()
+                    ];
+
+                    Log::error('Failed to delete customer in bulk action', [
+                        'customer_id' => $customerId,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            // Clear caches
+            $this->clearCustomerCaches();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'تم إكمال عملية الحذف المجمع',
+                'results' => $results,
+                'summary' => [
+                    'total_requested' => count($customerIds),
+                    'successful' => count($results['successful']),
+                    'failed' => count($results['failed']),
+                    'skipped' => count($results['skipped'])
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            throw $e;
+        }
+    }
+
+    /**
+     * Perform bulk export operation
+     */
+    private function performBulkExport($customerIds)
+    {
+        try {
+            // Get customers with their transaction counts
+            $customers = Customer::whereIn('id', $customerIds)
+                ->withCount('transactions')
+                ->get();
+
+            if ($customers->isEmpty()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'لا توجد زبائن للتصدير'
+                ], 422);
+            }
+
+            // Enrich customer data
+            $enrichedCustomers = $customers->map(function ($customer) {
+                return $this->enrichCustomerData($customer);
+            });
+
+            // Prepare CSV data
+            $csvData = $this->prepareExportData($enrichedCustomers);
+
+            Log::info('Bulk export completed', [
+                'customer_count' => count($enrichedCustomers),
+                'exported_by' => auth()->id()
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $csvData,
+                'filename' => 'selected_customers_' . date('Y-m-d_H-i-s') . '.csv',
+                'total_records' => count($enrichedCustomers),
+                'export_info' => [
+                    'generated_at' => now()->toISOString(),
+                    'generated_by' => auth()->user()->name ?? 'Unknown User',
+                    'customer_ids' => $customerIds
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Bulk export error: ' . $e->getMessage(), [
+                'customer_ids' => $customerIds
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Test endpoint to verify bulk action is working
+     */
+    public function testBulkAction()
+    {
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Bulk action endpoint is working correctly',
+            'timestamp' => now(),
+            'user' => auth()->user()->name ?? 'Unknown',
+            'route_info' => [
+                'name' => request()->route()->getName(),
+                'uri' => request()->route()->uri(),
+                'methods' => request()->route()->methods()
+            ]
+        ]);
     }
     private function bulkDelete($customerIds)
     {
