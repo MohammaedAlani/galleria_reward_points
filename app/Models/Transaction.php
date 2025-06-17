@@ -26,6 +26,10 @@ class Transaction extends Model
         'approvedByUser',
     ];
 
+    protected $casts = [
+        'transaction_date' => 'datetime',
+    ];
+
     public function customer()
     {
         return $this->belongsTo(Customer::class);
