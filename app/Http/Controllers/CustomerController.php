@@ -313,7 +313,6 @@ class CustomerController extends Controller
                 $query->where(function($q) use ($searchTerm) {
                     $q->where('name', 'like', "%{$searchTerm}%")
                         ->orWhere('phone', 'like', "%{$searchTerm}%")
-                        ->orWhere('email', 'like', "%{$searchTerm}%")
                         ->orWhere('card_number', 'like', "%{$searchTerm}%");
                 });
             }
