@@ -176,7 +176,7 @@ class CustomerController extends Controller
     /**
      * Update the specified customer with enhanced validation
      */
-    public function update(UpdateCustomerRequest $request, Customer $customer)
+    public function update(Request $request, Customer $customer)
     {
         DB::beginTransaction();
         try {
