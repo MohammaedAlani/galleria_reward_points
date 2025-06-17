@@ -5,6 +5,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
 
@@ -28,6 +29,10 @@ Route::prefix('v1')->group(function () {
         Route::get('customers/analytics', [CustomerController::class, 'analytics']);
         Route::get('customers/dashboard-stats', [CustomerController::class, 'dashboardStats']);
         Route::get('customers/trends', [CustomerController::class, 'trends']);
+
+        Route::get('dashboard/stats', [DashboardController::class, 'stats']);
+        Route::get('dashboard/analytics', [DashboardController::class, 'analytics']);
+
 
         // Export routes (must come before resource routes)
         Route::get('customers/export', [CustomerController::class, 'export']);

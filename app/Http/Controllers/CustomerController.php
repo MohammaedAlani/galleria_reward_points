@@ -570,12 +570,6 @@ class CustomerController extends Controller
                 case 'export':
                     return $this->performBulkExport($request->customer_ids);
 
-                case 'archive':
-                    return $this->performBulkArchive($request->customer_ids);
-
-                case 'restore':
-                    return $this->performBulkRestore($request->customer_ids);
-
                 default:
                     return response()->json([
                         'status' => 'error',
