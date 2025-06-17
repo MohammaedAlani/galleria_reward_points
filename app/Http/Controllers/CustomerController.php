@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Customer;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -486,6 +487,33 @@ class CustomerController extends Controller
                 'message' => 'فشل في جلب التحليلات',
             ], 500);
         }
+    }
+
+    /**
+     * Dashboard stats for quick overview
+     */
+    public function dashboardStats()
+    {
+        return Cache::remember('customer_dashboard_stats', 300, function () {
+            $totalCustomers = Customer::count();
+            $activeCustomers = Customer::where('last_transaction_date', '>=', Carbon::now()->subDays(30))->count();
+            $newThisMonth = Customer::whereDate('created_at', '>=', Carbon::now()->startOfMonth())->count();
+            $totalPoints = Customer::sum('total_points');
+            $availablePoints = Customer::selectRaw('SUM(total_points - total_spent) as available')->first()->available ?? 0;
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'total_customers' => $totalCustomers,
+                    'active_customers' => $activeCustomers,
+                    'new_this_month' => $newThisMonth,
+                    'inactive_customers' => $totalCustomers - $activeCustomers,
+                    'total_points' => $totalPoints,
+                    'available_points' => $availablePoints,
+                    'points_value_iqd' => $availablePoints * config('points.iqd_per_point', 100)
+                ]
+            ]);
+        });
     }
 
 
