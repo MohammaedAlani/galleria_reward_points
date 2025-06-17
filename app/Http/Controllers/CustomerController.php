@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class CustomerController extends Controller
 {
@@ -17,32 +18,64 @@ class CustomerController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Customer::query();
+        try {
+            $startTime = microtime(true);
 
-        // Apply filters
-        $this->applyFilters($query, $request);
+            $query = Customer::query();
 
-        // Apply sorting
-        $this->applySorting($query, $request);
+            // Apply filters
+            $this->applyFilters($query, $request);
 
-        // Pagination
-        $perPage = min($request->get('per_page', 15), 100);
-        $customers = $query->paginate($perPage);
+            // Apply sorting
+            $this->applySorting($query, $request);
 
-        // Add calculated fields to each customer
-        $customers->getCollection()->transform(function ($customer) {
-            return $this->enrichCustomerData($customer);
-        });
+            // Check if only stats requested
+            if ($request->get('stats_only')) {
+                return response()->json([
+                    'status' => 'success',
+                    'stats' => $this->getCustomerStats($request),
+                ]);
+            }
 
-        // Get enhanced statistics
-        $stats = $this->getCustomerStats($request);
+            // Pagination
+            $perPage = min($request->get('per_page', 15), 100);
+            $customers = $query->paginate($perPage);
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $customers,
-            'stats' => $stats,
-            'filters_applied' => $this->getAppliedFilters($request),
-        ]);
+            // Add calculated fields to each customer
+            $customers->getCollection()->transform(function ($customer) {
+                return $this->enrichCustomerData($customer);
+            });
+
+            // Get enhanced statistics
+            $stats = $this->getCustomerStats($request);
+
+            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $customers,
+                'stats' => $stats,
+                'filters_applied' => $this->getAppliedFilters($request),
+                'meta' => [
+                    'execution_time_ms' => $executionTime,
+                    'memory_usage_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
+                    'total_queries' => DB::getQueryLog() ? count(DB::getQueryLog()) : 0,
+                    'cache_hits' => 0 // Implement if using query caching
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Customer index error: ' . $e->getMessage(), [
+                'request' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'خطأ في جلب بيانات الزبائن',
+                'debug' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
+        }
     }
 
     /**
@@ -50,27 +83,43 @@ class CustomerController extends Controller
      */
     public function show(Customer $customer)
     {
-        // Load customer with all related data
-        $customer = $customer->load([
-            'transactions' => function($query) {
-                $query->with(['addByUser:id,name', 'approvedByUser:id,name'])
-                    ->orderBy('created_at', 'desc')
-                    ->limit(50);
-            }
-        ]);
+        try {
+            // Load customer with all related data
+            $customer = $customer->load([
+                'transactions' => function($query) {
+                    $query->with(['addByUser:id,name', 'approvedByUser:id,name'])
+                        ->orderBy('created_at', 'desc')
+                        ->limit(50);
+                }
+            ]);
 
-        // Enrich customer data
-        $enrichedCustomer = $this->enrichCustomerData($customer);
+            // Enrich customer data
+            $enrichedCustomer = $this->enrichCustomerData($customer);
 
-        // Get customer analytics
-        $analytics = $this->getCustomerAnalytics($customer->id);
+            // Get customer analytics
+            $analytics = $this->getCustomerAnalytics($customer->id);
 
-        return response()->json([
-            'status' => 'success',
-            'data' => array_merge($enrichedCustomer->toArray(), [
-                'analytics' => $analytics
-            ]),
-        ]);
+            // Get customer activity timeline
+            $timeline = $this->getCustomerTimeline($customer->id);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => array_merge($enrichedCustomer->toArray(), [
+                    'analytics' => $analytics,
+                    'timeline' => $timeline
+                ]),
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Customer show error: ' . $e->getMessage(), [
+                'customer_id' => $customer->id ?? null
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'خطأ في جلب بيانات الزبون'
+            ], 500);
+        }
     }
 
     /**
@@ -123,52 +172,71 @@ class CustomerController extends Controller
     }
 
     /**
-     * Update the specified customer
+     * Update the specified customer with enhanced validation
      */
-    public function update(Request $request, Customer $customer)
+    public function update(UpdateCustomerRequest $request, Customer $customer)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'phone' => 'required|string|max:20|unique:customers,phone,' . $customer->id,
-            'address' => 'nullable|string|max:255',
-            'card_number' => 'nullable|string|max:50|unique:customers,card_number,' . $customer->id,
-            'date_of_birth' => 'nullable|date',
-            'gender' => 'nullable|in:male,female',
-            'notes' => 'nullable|string|max:1000',
-        ]);
-
         DB::beginTransaction();
         try {
-            $customer->update($request->all());
+            $oldData = $customer->toArray();
+
+            $customer->update([
+                'name' => trim($request->name),
+                'phone' => trim($request->phone),
+                'email' => $request->email ? trim($request->email) : null,
+                'address' => $request->address ? trim($request->address) : null,
+                'card_number' => $request->card_number ? trim($request->card_number) : null,
+                'date_of_birth' => $request->date_of_birth,
+                'gender' => $request->gender,
+                'notes' => $request->notes,
+            ]);
+
+            // Log significant changes
+            $changes = array_diff_assoc($customer->toArray(), $oldData);
+            if (!empty($changes)) {
+                Log::info('Customer updated', [
+                    'customer_id' => $customer->id,
+                    'updated_by' => auth()->id(),
+                    'changes' => array_keys($changes)
+                ]);
+            }
 
             // Enrich the updated customer data
             $enrichedCustomer = $this->enrichCustomerData($customer->fresh());
 
             DB::commit();
 
+            // Clear related caches
+            $this->clearCustomerCaches();
+
             return response()->json([
                 'status' => 'success',
                 'data' => $enrichedCustomer,
-                'message' => 'Customer updated successfully.',
+                'message' => 'تم تحديث بيانات الزبون بنجاح',
             ]);
 
         } catch (\Exception $e) {
             DB::rollback();
+            Log::error('Customer update error: ' . $e->getMessage(), [
+                'customer_id' => $customer->id,
+                'user_id' => auth()->id()
+            ]);
+
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to update customer: ' . $e->getMessage(),
+                'message' => 'فشل في تحديث بيانات الزبون: ' . $e->getMessage(),
             ], 500);
         }
     }
 
     /**
-     * Remove the specified customer
+     * Remove the specified customer with enhanced checks
      */
     public function destroy(Customer $customer)
     {
         DB::beginTransaction();
         try {
-            // Check if customer has any pending transactions
+            // Enhanced deletion checks
             $pendingTransactions = Transaction::where('customer_id', $customer->id)
                 ->where('transaction_status', 'pending')
                 ->count();
@@ -176,177 +244,250 @@ class CustomerController extends Controller
             if ($pendingTransactions > 0) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Cannot delete customer with pending transactions.',
+                    'message' => "لا يمكن حذف الزبون لوجود {$pendingTransactions} معاملة معلقة",
                 ], 422);
             }
 
-            // Delete customer transactions (only approved/rejected ones)
-            Transaction::where('customer_id', $customer->id)
-                ->whereIn('transaction_status', ['approved', 'rejected', 'cancelled'])
-                ->delete();
+            // Check if customer has high value
+            $pointsThreshold = config('points.high_value_customer_threshold', 5000);
+            if ($customer->total_points >= $pointsThreshold) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'لا يمكن حذف زبون ذو نقاط عالية بدون موافقة إدارية',
+                ], 422);
+            }
+
+            // Store customer data for logging
+            $customerData = $customer->toArray();
+
+            // Soft delete transactions first
+            Transaction::where('customer_id', $customer->id)->delete();
 
             // Delete the customer
             $customer->delete();
 
+            // Log deletion
+            Log::warning('Customer deleted', [
+                'customer_data' => $customerData,
+                'deleted_by' => auth()->id(),
+                'deletion_time' => now()
+            ]);
+
             DB::commit();
+
+            // Clear related caches
+            $this->clearCustomerCaches();
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Customer deleted successfully.',
+                'message' => 'تم حذف الزبون بنجاح',
             ]);
 
         } catch (\Exception $e) {
             DB::rollback();
+            Log::error('Customer deletion error: ' . $e->getMessage(), [
+                'customer_id' => $customer->id,
+                'user_id' => auth()->id()
+            ]);
+
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to delete customer: ' . $e->getMessage(),
+                'message' => 'فشل في حذف الزبون: ' . $e->getMessage(),
             ], 500);
         }
     }
 
     /**
-     * Export customers data
+     * Search customers with advanced filters
+     */
+    public function search(Request $request)
+    {
+        try {
+            $query = Customer::query();
+
+            // Apply search term
+            if ($request->has('q') && $request->q) {
+                $searchTerm = $request->q;
+                $query->where(function($q) use ($searchTerm) {
+                    $q->where('name', 'like', "%{$searchTerm}%")
+                        ->orWhere('phone', 'like', "%{$searchTerm}%")
+                        ->orWhere('email', 'like', "%{$searchTerm}%")
+                        ->orWhere('card_number', 'like', "%{$searchTerm}%");
+                });
+            }
+
+            // Limit results for performance
+            $limit = min($request->get('limit', 20), 50);
+            $customers = $query->limit($limit)->get();
+
+            // Transform for display
+            $transformedCustomers = $customers->map(function ($customer) {
+                return [
+                    'id' => $customer->id,
+                    'name' => $customer->name,
+                    'phone' => $customer->phone,
+                    'email' => $customer->email,
+                    'card_number' => $customer->card_number,
+                    'total_points' => $customer->total_points,
+                    'status' => $this->calculateCustomerStatus($customer),
+                    'avatar' => $customer->name ? strtoupper(substr($customer->name, 0, 1)) : 'Z'
+                ];
+            });
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $transformedCustomers,
+                'count' => $transformedCustomers->count()
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Customer search error: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'خطأ في البحث',
+                'data' => []
+            ], 500);
+        }
+    }
+
+    /**
+     * Get customer suggestions for autocomplete
+     */
+    public function suggestions(Request $request)
+    {
+        try {
+            $query = $request->get('q', '');
+
+            if (strlen($query) < 2) {
+                return response()->json([
+                    'status' => 'success',
+                    'data' => []
+                ]);
+            }
+
+            $customers = Customer::where('name', 'like', "%{$query}%")
+                ->orWhere('phone', 'like', "%{$query}%")
+                ->limit(10)
+                ->get(['id', 'name', 'phone']);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $customers
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'data' => []
+            ]);
+        }
+    }
+
+    /**
+     * Export customers data with enhanced formatting
      */
     public function export(Request $request)
     {
-        $query = Customer::query();
-        $this->applyFilters($query, $request);
+        try {
+            set_time_limit(300); // 5 minutes for large exports
+            ini_set('memory_limit', '512M');
 
-        $customers = $query->get();
-        $enrichedCustomers = $customers->map(function ($customer) {
-            return $this->enrichCustomerData($customer);
-        });
+            $query = Customer::query();
+            $this->applyFilters($query, $request);
 
-        $csvData = [];
-        $csvData[] = [
-            'ID', 'Name', 'Phone', 'Address', 'Card Number',
-            'Total Points', 'Available Points', 'Used Points', 'Points Value (IQD)',
-            'Total Transactions', 'Last Transaction Date', 'Last Transaction Amount',
-            'Customer Status', 'Registration Date', 'Gender', 'Date of Birth', 'Notes'
-        ];
+            // Limit export size for performance
+            $maxExportSize = config('points.max_export_records', 10000);
+            $totalCount = $query->count();
 
-        foreach ($enrichedCustomers as $customer) {
-            $csvData[] = [
-                $customer->id,
-                $customer->name,
-                $customer->phone,
-                $customer->address ?? 'N/A',
-                $customer->card_number ?? 'N/A',
-                $customer->total_points,
-                $customer->total_points_can_use,
-                $customer->total_spent,
-                $customer->points_amount,
-                $customer->transaction_count,
-                $customer->last_transaction_date ?? 'N/A',
-                $customer->last_transaction_amount ?? 0,
-                $customer->customer_status,
-                $customer->created_at,
-                $customer->gender ?? 'N/A',
-                $customer->date_of_birth ?? 'N/A',
-                $customer->notes ?? 'N/A',
-            ];
+            if ($totalCount > $maxExportSize) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "حجم التصدير كبير جداً ({$totalCount} سجل). الحد الأقصى هو {$maxExportSize} سجل",
+                ], 422);
+            }
+
+            // Get customers with transaction counts
+            $customers = $query->withCount('transactions')->get();
+
+            $enrichedCustomers = $customers->map(function ($customer) {
+                return $this->enrichCustomerData($customer);
+            });
+
+            // Enhanced CSV headers
+            $csvData = $this->prepareExportData($enrichedCustomers);
+
+            // Log export activity
+            Log::info('Customer export completed', [
+                'exported_by' => auth()->id(),
+                'record_count' => count($enrichedCustomers),
+                'filters_applied' => $this->getAppliedFilters($request)
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $csvData,
+                'filename' => 'customers_export_' . date('Y-m-d_H-i-s') . '.csv',
+                'total_records' => count($enrichedCustomers),
+                'export_info' => [
+                    'generated_at' => now()->toISOString(),
+                    'generated_by' => auth()->user()->name ?? 'مستخدم غير معروف',
+                    'filters_applied' => $this->getAppliedFilters($request)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Export error: ' . $e->getMessage(), [
+                'user_id' => auth()->id(),
+                'filters' => $request->all()
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'فشل في تصدير البيانات: ' . $e->getMessage(),
+            ], 500);
         }
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $csvData,
-            'filename' => 'customers_' . date('Y-m-d_H-i-s') . '.csv',
-            'total_records' => count($enrichedCustomers)
-        ]);
     }
 
     /**
-     * Get customer analytics
+     * Get comprehensive customer analytics
      */
     public function analytics(Request $request)
     {
-        $dateFrom = $request->get('date_from', Carbon::now()->subDays(30)->format('Y-m-d'));
-        $dateTo = $request->get('date_to', Carbon::now()->format('Y-m-d'));
+        try {
+            $cacheKey = 'customer_analytics_' . md5(serialize($request->all()));
 
-        // Customer registration trends
-        $registrationTrends = Customer::selectRaw('
-                DATE(created_at) as date,
-                COUNT(*) as new_customers
-            ')
-            ->whereBetween('created_at', [$dateFrom, $dateTo])
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
+            return Cache::remember($cacheKey, 300, function () use ($request) {
+                $dateFrom = $request->get('date_from', Carbon::now()->subDays(30)->format('Y-m-d'));
+                $dateTo = $request->get('date_to', Carbon::now()->format('Y-m-d'));
 
-        // Customer activity levels
-        $activityLevels = Customer::selectRaw('
-                CASE
-                    WHEN DATEDIFF(NOW(), last_transaction_date) <= 30 THEN "active"
-                    WHEN DATEDIFF(NOW(), last_transaction_date) <= 90 THEN "moderate"
-                    ELSE "inactive"
-                END as activity_level,
-                COUNT(*) as count
-            ')
-            ->groupBy('activity_level')
-            ->get();
+                $analytics = [
+                    'overview' => $this->getAnalyticsOverview($dateFrom, $dateTo),
+                    'registration_trends' => $this->getRegistrationTrends($dateFrom, $dateTo),
+                    'activity_levels' => $this->getActivityLevels(),
+                    'top_customers' => $this->getTopCustomers(),
+                    'points_distribution' => $this->getPointsDistribution(),
+                    'geographic_distribution' => $this->getGeographicDistribution(),
+                    'demographic_analysis' => $this->getDemographicAnalysis(),
+                    'behavioral_insights' => $this->getBehavioralInsights()
+                ];
 
-        // Top customers by points
-        $topCustomers = Customer::selectRaw('
-                id, name, phone, total_points, total_points_can_use, total_spent
-            ')
-            ->orderByDesc('total_points')
-            ->limit(10)
-            ->get();
-
-        // Points distribution
-        $pointsDistribution = Customer::selectRaw('
-                CASE
-                    WHEN total_points_can_use = 0 THEN "0"
-                    WHEN total_points_can_use <= 100 THEN "1-100"
-                    WHEN total_points_can_use <= 500 THEN "101-500"
-                    WHEN total_points_can_use <= 1000 THEN "501-1000"
-                    ELSE "1000+"
-                END as points_range,
-                COUNT(*) as count
-            ')
-            ->groupBy('points_range')
-            ->get();
-
-        return response()->json([
-            'status' => 'success',
-            'data' => [
-                'registration_trends' => $registrationTrends,
-                'activity_levels' => $activityLevels,
-                'top_customers' => $topCustomers,
-                'points_distribution' => $pointsDistribution,
-                'date_range' => [
-                    'from' => $dateFrom,
-                    'to' => $dateTo
-                ]
-            ]
-        ]);
-    }
-
-    /**
-     * Bulk operations on customers
-     */
-    public function bulkAction(Request $request)
-    {
-        $request->validate([
-            'action' => 'required|in:delete,export,update_status',
-            'customer_ids' => 'required|array|min:1',
-            'customer_ids.*' => 'exists:customers,id'
-        ]);
-
-        switch ($request->action) {
-            case 'delete':
-                return $this->bulkDelete($request->customer_ids);
-            case 'export':
-                return $this->bulkExport($request->customer_ids);
-            default:
                 return response()->json([
-                    'status' => 'error',
-                    'message' => 'Invalid action specified.'
-                ], 422);
+                    'status' => 'success',
+                    'data' => $analytics
+                ]);
+            });
+
+        } catch (\Exception $e) {
+            Log::error('Analytics error: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'فشل في جلب التحليلات',
+            ], 500);
         }
     }
 
-    // Private helper methods
 
     private function applyFilters($query, Request $request)
     {
@@ -569,66 +710,123 @@ class CustomerController extends Controller
         return $filters;
     }
 
-    private function bulkDelete($customerIds)
+    /**
+     * Enhanced bulk operations
+     */
+    public function bulkAction(Request $request)
     {
-        $results = [
-            'successful' => [],
-            'failed' => [],
-        ];
+        $validator = Validator::make($request->all(), [
+            'action' => 'required|in:delete,export,archive,restore',
+            'customer_ids' => 'required|array|min:1|max:100',
+            'customer_ids.*' => 'exists:customers,id'
+        ]);
 
-        foreach ($customerIds as $customerId) {
-            try {
-                $customer = Customer::findOrFail($customerId);
-
-                // Check for pending transactions
-                $pendingCount = Transaction::where('customer_id', $customerId)
-                    ->where('transaction_status', 'pending')
-                    ->count();
-
-                if ($pendingCount > 0) {
-                    $results['failed'][] = [
-                        'id' => $customerId,
-                        'name' => $customer->name,
-                        'reason' => 'Has pending transactions'
-                    ];
-                    continue;
-                }
-
-                // Delete transactions and customer
-                Transaction::where('customer_id', $customerId)->delete();
-                $customer->delete();
-
-                $results['successful'][] = [
-                    'id' => $customerId,
-                    'name' => $customer->name
-                ];
-
-            } catch (\Exception $e) {
-                $results['failed'][] = [
-                    'id' => $customerId,
-                    'reason' => $e->getMessage()
-                ];
-            }
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'بيانات غير صحيحة',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Bulk delete completed',
-            'results' => $results,
-        ]);
-    }
+        try {
+            switch ($request->action) {
+                case 'delete':
+                    return $this->bulkDelete($request->customer_ids);
+                case 'export':
+                    return $this->bulkExport($request->customer_ids);
+                case 'archive':
+                    return $this->bulkArchive($request->customer_ids);
+                case 'restore':
+                    return $this->bulkRestore($request->customer_ids);
+                default:
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'إجراء غير مدعوم'
+                    ], 422);
+            }
+        } catch (\Exception $e) {
+            Log::error('Bulk action error: ' . $e->getMessage(), [
+                'action' => $request->action,
+                'customer_ids' => $request->customer_ids,
+                'user_id' => auth()->id()
+            ]);
 
-    private function bulkExport($customerIds)
+            return response()->json([
+                'status' => 'error',
+                'message' => 'فشل في تنفيذ العملية المجمعة'
+            ], 500);
+        }
+    }
+    private function bulkDelete($customerIds)
     {
-        $customers = Customer::whereIn('id', $customerIds)->get();
-        $enrichedCustomers = $customers->map(function ($customer) {
-            return $this->enrichCustomerData($customer);
+        $results = ['successful' => [], 'failed' => []];
+
+        DB::transaction(function () use ($customerIds, &$results) {
+            foreach ($customerIds as $customerId) {
+                try {
+                    $customer = Customer::findOrFail($customerId);
+
+                    // Check for pending transactions
+                    $pendingCount = Transaction::where('customer_id', $customerId)
+                        ->where('transaction_status', 'pending')
+                        ->count();
+
+                    if ($pendingCount > 0) {
+                        $results['failed'][] = [
+                            'id' => $customerId,
+                            'name' => $customer->name,
+                            'reason' => 'يحتوي على معاملات معلقة'
+                        ];
+                        continue;
+                    }
+
+                    // Delete transactions and customer
+                    Transaction::where('customer_id', $customerId)->delete();
+                    $customer->delete();
+
+                    $results['successful'][] = [
+                        'id' => $customerId,
+                        'name' => $customer->name
+                    ];
+
+                } catch (\Exception $e) {
+                    $results['failed'][] = [
+                        'id' => $customerId,
+                        'reason' => $e->getMessage()
+                    ];
+                }
+            }
         });
 
         return response()->json([
             'status' => 'success',
-            'data' => $enrichedCustomers,
-            'filename' => 'selected_customers_' . date('Y-m-d_H-i-s') . '.csv',
+            'message' => 'تم إكمال عملية الحذف المجمع',
+            'results' => $results
         ]);
+    }
+    private function bulkExport($customerIds)
+    {
+        try {
+            $customers = Customer::whereIn('id', $customerIds)
+                ->withCount('transactions')
+                ->get();
+
+            $enrichedCustomers = $customers->map(function ($customer) {
+                return $this->enrichCustomerData($customer);
+            });
+
+            $csvData = $this->prepareExportData($enrichedCustomers);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $csvData,
+                'filename' => 'selected_customers_' . date('Y-m-d_H-i-s') . '.csv',
+                'total_records' => count($enrichedCustomers)
+            ]);
+
+        } catch (\Exception $e) {
+            throw $e;
+        }
     }
 }
