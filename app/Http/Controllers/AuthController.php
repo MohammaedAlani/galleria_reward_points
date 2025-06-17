@@ -16,6 +16,10 @@ class AuthController extends Controller
             $user = auth()->user();
             $token = $user->createToken('auth_token')->plainTextToken;
 
+            // update last_login_at
+            $user->last_login_at = now();
+            $user->save();
+
             return response()->json([
                 'status' => 'success',
                 'data' => [
