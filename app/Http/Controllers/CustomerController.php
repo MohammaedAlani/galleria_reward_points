@@ -327,7 +327,6 @@ class CustomerController extends Controller
                     'id' => $customer->id,
                     'name' => $customer->name,
                     'phone' => $customer->phone,
-                    'email' => $customer->email,
                     'card_number' => $customer->card_number,
                     'total_points' => $customer->total_points,
                     'status' => $this->calculateCustomerStatus($customer),
@@ -463,14 +462,14 @@ class CustomerController extends Controller
                 $dateTo = $request->get('date_to', Carbon::now()->format('Y-m-d'));
 
                 $analytics = [
-                    'overview' => $this->getAnalyticsOverview($dateFrom, $dateTo),
-                    'registration_trends' => $this->getRegistrationTrends($dateFrom, $dateTo),
-                    'activity_levels' => $this->getActivityLevels(),
-                    'top_customers' => $this->getTopCustomers(),
-                    'points_distribution' => $this->getPointsDistribution(),
-                    'geographic_distribution' => $this->getGeographicDistribution(),
-                    'demographic_analysis' => $this->getDemographicAnalysis(),
-                    'behavioral_insights' => $this->getBehavioralInsights()
+//                    'overview' => $this->getAnalyticsOverview($dateFrom, $dateTo),
+//                    'registration_trends' => $this->getRegistrationTrends($dateFrom, $dateTo),
+//                    'activity_levels' => $this->getActivityLevels(),
+//                    'top_customers' => $this->getTopCustomers(),
+//                    'points_distribution' => $this->getPointsDistribution(),
+//                    'geographic_distribution' => $this->getGeographicDistribution(),
+//                    'demographic_analysis' => $this->getDemographicAnalysis(),
+//                    'behavioral_insights' => $this->getBehavioralInsights()
                 ];
 
                 return response()->json([
@@ -522,6 +521,7 @@ class CustomerController extends Controller
      */
     public function bulkAction(Request $request)
     {
+
         // Debug logging
         Log::info('Bulk action called', [
             'request_data' => $request->all(),
@@ -845,10 +845,7 @@ class CustomerController extends Controller
             $query->where(function($q) use ($searchTerm) {
                 $q->where('name', 'like', "%{$searchTerm}%")
                     ->orWhere('phone', 'like', "%{$searchTerm}%")
-                    ->orWhere('address', 'like', "%{$searchTerm}%")
-                    ->orWhere('card_number', 'like', "%{$searchTerm}%")
-                    ->orWhere('email', 'like', "%{$searchTerm}%")
-                    ->orWhere('notes', 'like', "%{$searchTerm}%");
+                    ->orWhere('address', 'like', "%{$searchTerm}%");
             });
         }
 

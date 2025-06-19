@@ -2,9 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Customer;
+use Carbon\Carbon;
 use App\Models\Transaction;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class TransactionController extends Controller
 {
@@ -131,7 +136,185 @@ class TransactionController extends Controller
             ]);
         });
     }
+    private function enrichCustomerData($transaction){
+        //            "id" => 38
+//        "customer_id" => 12
+//        "add_by" => "1"
+//        "approved_by" => "1"
+//        "transaction_type" => "use"
+//        "transaction_date" => "2025-06-10 11:38:49"
+//        "transaction_amount" => "1000"
+//        "transaction_number" => "1231231231233"
+//        "transaction_status" => "pending"
+//        "created_at" => "2025-06-10 11:38:49"
+//        "updated_at" => "2025-06-10 11:38:49"
+        $addBy = User::find($transaction->add_by);
+        $approvedBY =User::find($transaction->transaction_type);
+        $customer = Customer::find($transaction->customer_id);
+        if($addBy){
+            $transaction->add_by = $addBy->name;
+        }else{
+            $transaction->add_by='--';
+        }
+            if ($customer){
+                $transaction->customer_id = $customer->name;
+            }else{
+                $transaction->customer_id='--';
+            }
+        if($approvedBY){
+            $transaction->approved_by = $approvedBY->name;
+        }else{
+            $transaction->approved_by='--';
+        }
+        $transaction->transaction_type  = $transaction->transaction_type == 'use' ?' استخدام  نقاط':'استرجاع';
+        $transaction->transaction_date=$transaction->transaction_date? Carbon::parse($transaction->transaction_date)->diffInDays(Carbon::now()) : 0;
+        $transaction->created_at=$transaction->created_at? Carbon::parse($transaction->created_at)->diffInDays(Carbon::now()) : 0;
 
+        return $transaction;
+    }
+
+    private function prepareExportData($transactions)
+    {
+        $csvData = [];
+        // Headers
+        $csvData[] = [
+            'اسم الزبون', 'نوع الحركة', 'المبلغ ', 'رقم الحركة',
+            'تاريخ الحركة', 'اضيفت بواسطة', 'تمت الموافقة بواسطة ', 'حالة الحركة'
+        ];
+
+        // Data rows
+        foreach ($transactions as $transaction) {
+            $csvData[] = [
+                $transaction->customer_id,
+                $transaction->transaction_type,
+                $transaction->transaction_amount,
+                $transaction->transaction_number ,
+                $transaction->transaction_date ,
+                $transaction->add_by ,
+                $transaction->approved_by ,
+                $transaction->transaction_status ,
+            ];
+        }
+
+        return $csvData;
+    }
+    private function performBulkExport($transactionIds)
+    {
+        try {
+            // Get customers with their transaction counts
+            $transactions = Transaction::whereIn('id', $transactionIds)
+                ->get();
+
+            if ($transactions->isEmpty()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'لا توجد زبائن للتصدير'
+                ], 422);
+            }
+
+            // Enrich customer data
+            $enrichedTransaction = $transactions->map(function ($transaction) {
+                return $this->enrichCustomerData($transaction);
+            });
+
+            // Prepare CSV data
+            $csvData = $this->prepareExportData($enrichedTransaction);
+
+            Log::info('Bulk export completed', [
+                'customer_count' => count($enrichedTransaction),
+                'exported_by' => auth()->id()
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $csvData,
+                'filename' => 'selected_transaction_' . date('Y-m-d_H-i-s') . '.csv',
+                'total_records' => count($enrichedTransaction),
+                'export_info' => [
+                    'generated_at' => now()->toISOString(),
+                    'generated_by' => auth()->user()->name ?? 'Unknown Transaction',
+                    'customer_ids' => $transactionIds
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Bulk export error: ' . $e->getMessage(), [
+                'customer_ids' => $transactionIds
+            ]);
+            throw $e;
+        }
+    }
+
+    public function bulkAction(Request $request){
+//        // Debug logging
+        Log::info('Bulk action called', [
+            'request_data' => $request->all(),
+            'user_id' => auth()->id(),
+            'route_name' => request()->route()->getName(),
+            'route_uri' => request()->route()->uri()
+        ]);
+//        // Validate request
+        $validator = Validator::make($request->all(), [
+            'action' => 'required|in:delete,export,archive,restore,update_status',
+            'transaction_ids' => 'required|array|min:1|max:100',
+            'transaction_ids.*' => 'integer|exists:transactions,id'
+        ]);
+//
+        if ($validator->fails()) {
+            Log::warning('Bulk action validation failed', [
+                'errors' => $validator->errors(),
+                'request' => $request->all()
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'بيانات غير صحيحة',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+//
+        try {
+//            // Check if customers exist
+            $existingCustomers = Transaction::whereIn('id', $request->transaction_ids)->count();
+            if ($existingCustomers !== count($request->transaction_ids)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'بعض الزبائن المحددين غير موجودين',
+                    'found' => $existingCustomers,
+                    'requested' => count($request->transaction_ids)
+                ], 422);
+            }
+            switch ($request->action) {
+
+                case 'export':
+                    return $this->performBulkExport($request->transaction_ids);
+
+                default:
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'إجراء غير مدعوم: ' . $request->action
+                    ], 422);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Bulk action error: ' . $e->getMessage(), [
+                'action' => $request->action,
+                'transaction_ids' => $request->transaction_ids,
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'فشل في تنفيذ العملية المجمعة: ' . $e->getMessage(),
+                'debug' => config('app.debug') ? [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getTraceAsString()
+                ] : null
+            ], 500);
+        }
+    }
     /**
      * Get customer's transaction history
      */
@@ -470,7 +653,10 @@ class TransactionController extends Controller
     }
 
     // ... rest of your existing methods remain the same ...
-
+//    public function show()
+//    {
+//        dd('show');
+//    }
     /**
      * Show the form for approval a new resource.
      */

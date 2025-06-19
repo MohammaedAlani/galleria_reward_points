@@ -21,15 +21,6 @@ class DashboardController extends Controller
             )
             ->first();
 
-//        $users = User::selectRaw("
-//            COUNT(*) as total,
-//            SUM(role = 'admin') as admins,
-//            SUM(role = 'accountant') as accountants,
-//            SUM(role = 'cashier') as cashiers
-//        ", [now()->startOfDay()])->first();
-//    abdullah
-//        SUM(last_login_at >= ?) as active_today
-
         $customers = [
             'total' => Customer::count(),
             'active' => Customer::where('total_points', '>', 0)->count(),

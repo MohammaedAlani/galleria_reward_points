@@ -15,10 +15,6 @@ class AuthController extends Controller
         if (auth()->attempt($credentials)) {
             $user = auth()->user();
             $token = $user->createToken('auth_token')->plainTextToken;
-
-            // update last_login_at
-//            abdullah
-//            $user->last_login_at = now();
             $user->save();
 
             return response()->json([
@@ -76,5 +72,56 @@ class AuthController extends Controller
             'data' => $users,
         ]);
     }
+
+    public function updateUser(Request $request, $id)
+    {
+        $user = User::find($id);
+
+        if (!$user) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'User not found',
+            ], 404);
+        }
+
+        $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $user->id,
+            'role' => 'sometimes|required|string',
+        ]);
+
+        $user->name = $request->name;
+        $user->email = $request->email;
+        $user->role = $request->role;
+        if($request->password){
+            $user->password = bcrypt($request->password);
+        }
+
+        $user->save();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $user,
+        ]);
+    }
+    public function deleteUser($id)
+    {
+        $user = User::find($id);
+
+        if (!$user) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'User not found',
+            ], 404);
+        }
+
+        $user->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'User deleted successfully',
+        ]);
+    }
+
 
 }

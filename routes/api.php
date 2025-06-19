@@ -19,7 +19,8 @@ Route::prefix('v1')->group(function () {
     Route::group(['middleware' => ['auth:sanctum']], function () {
         Route::post('user/create', [AuthController::class, 'create']);
         Route::get('user', [AuthController::class, 'index']);
-
+        Route::delete('user/{user}', [AuthController::class, 'deleteUser']);
+        Route::put('user/{user}', [AuthController::class, 'updateUser']);
         // ============================================
         // CUSTOMER ROUTES - CRITICAL: ORDER MATTERS!
         // Put ALL specific routes BEFORE apiResource
@@ -49,7 +50,7 @@ Route::prefix('v1')->group(function () {
         Route::post('customers/bulk-update', [CustomerController::class, 'bulkUpdate']);
         Route::post('customers/bulk-delete', [CustomerController::class, 'bulkDelete']);
         Route::post('customers/bulk-export', [CustomerController::class, 'bulkExport']);
-
+        Route::get('customers/{customer}', [CustomerController::class, 'show']);
         // Validation routes
         Route::post('customers/validate-phone', [CustomerController::class, 'validatePhone']);
         Route::post('customers/validate-email', [CustomerController::class, 'validateEmail']);
@@ -60,6 +61,7 @@ Route::prefix('v1')->group(function () {
 
         // Individual customer specific routes (these use {customer} parameter)
         Route::get('customers/{customer}/timeline', [CustomerController::class, 'timeline']);
+
         Route::get('customers/{customer}/transactions', [CustomerController::class, 'customerTransactions']);
         Route::get('customers/{customer}/analytics', [CustomerController::class, 'customerAnalytics']);
         Route::post('customers/{customer}/archive', [CustomerController::class, 'archive']);
@@ -96,6 +98,9 @@ Route::prefix('v1')->group(function () {
         // Resource routes
         Route::get('transactions', [TransactionController::class, 'index']);
         Route::get('transactions/{transaction}', [TransactionController::class, 'show']);
+
+        Route::post('transactions/bulk-action', [TransactionController::class, 'bulkAction']);
+        Route::apiResource('transactions', TransactionController::class);
     });
 });
 
