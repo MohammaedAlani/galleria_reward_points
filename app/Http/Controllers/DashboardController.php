@@ -6,18 +6,29 @@ use App\Models\Customer;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
     public function stats()
     {
-        $users = User::selectRaw("
-            COUNT(*) as total,
-            SUM(role = 'admin') as admins,
-            SUM(role = 'accountant') as accountants,
-            SUM(role = 'cashier') as cashiers,
-            SUM(last_login_at >= ?) as active_today
-        ", [now()->startOfDay()])->first();
+        $users= DB::table('users')
+            ->select(
+                DB::raw('COUNT(*) as total'),
+                DB::raw("SUM(role = 'admin') as admins"),
+                DB::raw("SUM(role = 'accountant') as accountants"),
+                DB::raw("SUM(role = 'cashier') as cashiers")
+            )
+            ->first();
+
+//        $users = User::selectRaw("
+//            COUNT(*) as total,
+//            SUM(role = 'admin') as admins,
+//            SUM(role = 'accountant') as accountants,
+//            SUM(role = 'cashier') as cashiers
+//        ", [now()->startOfDay()])->first();
+//    abdullah
+//        SUM(last_login_at >= ?) as active_today
 
         $customers = [
             'total' => Customer::count(),

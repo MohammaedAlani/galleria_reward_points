@@ -17,7 +17,8 @@ class AuthController extends Controller
             $token = $user->createToken('auth_token')->plainTextToken;
 
             // update last_login_at
-            $user->last_login_at = now();
+//            abdullah
+//            $user->last_login_at = now();
             $user->save();
 
             return response()->json([
@@ -50,12 +51,13 @@ class AuthController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
+            'role'=>'required|string',
             'password' => 'required|string|min:8|confirmed',
         ]);
-
         $user = new User();
         $user->name = $request->name;
         $user->email = $request->email;
+        $user->role= $request->role;
         $user->password = bcrypt($request->password);
         $user->save();
 
