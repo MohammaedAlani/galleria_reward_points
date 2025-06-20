@@ -154,17 +154,17 @@ class TransactionController extends Controller
         if($addBy){
             $transaction->add_by = $addBy->name;
         }else{
-            $transaction->add_by='--';
+            $transaction->add_by='غير محدد';
         }
             if ($customer){
                 $transaction->customer_id = $customer->name;
             }else{
-                $transaction->customer_id='--';
+                $transaction->customer_id='غير محدد';
             }
         if($approvedBY){
             $transaction->approved_by = $approvedBY->name;
         }else{
-            $transaction->approved_by='--';
+            $transaction->approved_by='غير محدد';
         }
         $transaction->transaction_type  = $transaction->transaction_type == 'use' ?' استخدام  نقاط':'استرجاع';
         $transaction->transaction_date=$transaction->transaction_date? Carbon::parse($transaction->transaction_date)->diffInDays(Carbon::now()) : 0;
@@ -228,7 +228,7 @@ class TransactionController extends Controller
             return response()->json([
                 'status' => 'success',
                 'data' => $csvData,
-                'filename' => 'selected_transaction_' . date('Y-m-d_H-i-s') . '.csv',
+                'filename' => 'selected_transaction_' . date('Y-m-d_H-i-s') . '.xlsx',
                 'total_records' => count($enrichedTransaction),
                 'export_info' => [
                     'generated_at' => now()->toISOString(),
@@ -272,7 +272,7 @@ class TransactionController extends Controller
                 'errors' => $validator->errors()
             ], 422);
         }
-//
+
         try {
 //            // Check if customers exist
             $existingCustomers = Transaction::whereIn('id', $request->transaction_ids)->count();

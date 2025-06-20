@@ -54,7 +54,7 @@ Route::prefix('v1')->group(function () {
         // Validation routes
         Route::post('customers/validate-phone', [CustomerController::class, 'validatePhone']);
         Route::post('customers/validate-email', [CustomerController::class, 'validateEmail']);
-        Route::post('customers/validate-card', [CustomerController::class, 'validateCardNumber']);
+//        Route::post('customers/validate-card', [CustomerController::class, 'validateCardNumber']);
 
         // Special operation routes with specific names
         Route::post('customers/merge-customers', [CustomerController::class, 'mergeCustomers']);
@@ -100,7 +100,6 @@ Route::prefix('v1')->group(function () {
         Route::get('transactions/{transaction}', [TransactionController::class, 'show']);
 
         Route::post('transactions/bulk-action', [TransactionController::class, 'bulkAction']);
-        Route::apiResource('transactions', TransactionController::class);
     });
 });
 

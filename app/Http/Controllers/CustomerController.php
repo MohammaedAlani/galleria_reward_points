@@ -133,9 +133,7 @@ class CustomerController extends Controller
         try {
             // Check for duplicate phone or card number
             $existingCustomer = Customer::where('phone', $request->phone)
-                ->orWhere('card_number', $request->card_number)
                 ->first();
-
             if ($existingCustomer) {
                 return response()->json([
                     'status' => 'error',
@@ -427,7 +425,7 @@ class CustomerController extends Controller
             return response()->json([
                 'status' => 'success',
                 'data' => $csvData,
-                'filename' => 'customers_export_' . date('Y-m-d_H-i-s') . '.csv',
+                'filename' => 'customers_export_' . date('Y-m-d_H-i-s') . '.xlsx',
                 'total_records' => count($enrichedCustomers),
                 'export_info' => [
                     'generated_at' => now()->toISOString(),
@@ -719,11 +717,10 @@ class CustomerController extends Controller
                 'customer_count' => count($enrichedCustomers),
                 'exported_by' => auth()->id()
             ]);
-
             return response()->json([
                 'status' => 'success',
                 'data' => $csvData,
-                'filename' => 'selected_customers_' . date('Y-m-d_H-i-s') . '.csv',
+                'filename' => 'selected_customers_' . date('Y-m-d_H-i-s') . '.xlsx',
                 'total_records' => count($enrichedCustomers),
                 'export_info' => [
                     'generated_at' => now()->toISOString(),
@@ -820,7 +817,7 @@ class CustomerController extends Controller
             return response()->json([
                 'status' => 'success',
                 'data' => $csvData,
-                'filename' => 'selected_customers_' . date('Y-m-d_H-i-s') . '.csv',
+                'filename' => 'selected_customers_' . date('Y-m-d_H-i-s') . '.xlsx',
                 'total_records' => count($enrichedCustomers)
             ]);
 
@@ -945,7 +942,6 @@ class CustomerController extends Controller
         // Calculate utilization rate
         $customer->utilization_rate = $customer->total_points > 0 ?
             round(($customer->total_spent / $customer->total_points) * 100, 1) : 0;
-
         return $customer;
     }
 
