@@ -36,7 +36,7 @@ Route::prefix('v1')->group(function () {
 
 
         // Export routes (must come before resource routes)
-        Route::get('customers/export', [CustomerController::class, 'export']);
+        Route::post('customers/export', [CustomerController::class, 'export']);
         Route::post('customers/export-custom', [CustomerController::class, 'exportCustom']);
 
         // Search routes
