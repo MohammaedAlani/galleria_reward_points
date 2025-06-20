@@ -21,7 +21,7 @@ class TransactionController extends Controller
         $validatedData = $request->validate([
             'customer_id' => 'required|exists:customers,id',
             'transaction_amount' => 'required|numeric|min:0',
-            'transaction_number' => 'required|string|unique:transactions,transaction_number',
+            'transaction_number' => 'required|string',
         ]);
 
         return DB::transaction(function () use ($validatedData) {
