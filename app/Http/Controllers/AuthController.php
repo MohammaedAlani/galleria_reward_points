@@ -90,11 +90,13 @@ class AuthController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $user->id,
             'role' => 'sometimes|required|string',
+            'location' => 'sometimes|required|string',
         ]);
 
         $user->name = $request->name;
         $user->email = $request->email;
         $user->role = $request->role;
+        $user->location = $request->location;
         if($request->password){
             $user->password = bcrypt($request->password);
         }
