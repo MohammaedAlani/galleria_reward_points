@@ -71,6 +71,7 @@ class TransactionController extends Controller
             $validatedData['location']= auth()->user()->location;
             // Don't set approved_by yet - will be set during approval
             $validatedData['transaction_date'] = now();
+            $validatedData['approved_by'] = $userId;
 
             // Check if customer has enough points before creating transaction
             $customer = \App\Models\Customer::find($validatedData['customer_id']);
