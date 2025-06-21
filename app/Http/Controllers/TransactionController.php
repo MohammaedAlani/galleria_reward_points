@@ -21,7 +21,7 @@ class TransactionController extends Controller
         $validatedData = $request->validate([
             'customer_id' => 'required|exists:customers,id',
             'transaction_amount' => 'required|numeric|min:0',
-            'transaction_number' => 'required|string|unique:transactions,transaction_number',
+            'transaction_number' => 'required|string',
         ]);
 
         return DB::transaction(function () use ($validatedData) {
@@ -29,7 +29,7 @@ class TransactionController extends Controller
             $validatedData['add_by'] = $userId;
             $validatedData['transaction_status'] = 'approved';
             $validatedData['transaction_type'] = 'add';
-            $validatedData['location']=auth()->user()->location;
+            $validatedData['location']= auth()->user()->location;
             $validatedData['approved_by'] = $userId;
             $validatedData['transaction_date'] = now();
 
@@ -68,6 +68,7 @@ class TransactionController extends Controller
             $validatedData['add_by'] = $userId;
             $validatedData['transaction_status'] = 'approved'; // Set to approved for now, will be updated during approval
             $validatedData['transaction_type'] = 'use';
+            $validatedData['location']= auth()->user()->location;
             // Don't set approved_by yet - will be set during approval
             $validatedData['transaction_date'] = now();
 
@@ -115,6 +116,7 @@ class TransactionController extends Controller
             $validatedData['transaction_status'] = 'approved';
             $validatedData['transaction_type'] = 'return';
             $validatedData['approved_by'] = $userId;
+            $validatedData['location']= auth()->user()->location;
             $validatedData['transaction_date'] = now();
 
             $transaction = Transaction::create($validatedData);
