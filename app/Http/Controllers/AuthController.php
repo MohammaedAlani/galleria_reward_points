@@ -48,12 +48,14 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'role'=>'required|string',
+            'location'=>'required|string',
             'password' => 'required|string|min:8|confirmed',
         ]);
         $user = new User();
         $user->name = $request->name;
         $user->email = $request->email;
         $user->role= $request->role;
+        $user->location=$request->location;
         $user->password = bcrypt($request->password);
         $user->save();
 

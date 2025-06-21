@@ -29,6 +29,7 @@ class TransactionController extends Controller
             $validatedData['add_by'] = $userId;
             $validatedData['transaction_status'] = 'approved';
             $validatedData['transaction_type'] = 'add';
+            $validatedData['location']=auth()->user()->location;
             $validatedData['approved_by'] = $userId;
             $validatedData['transaction_date'] = now();
 
@@ -449,7 +450,10 @@ class TransactionController extends Controller
         if ($request->has('date') && $request->date) {
             $query->whereDate('transaction_date', $request->date);
         }
+        if ($request->has('location') && $request->location) {
 
+            $query->where('location', $request->location);
+        }
         // Search functionality
         if ($request->has('search') && $request->search) {
             $searchTerm = $request->search;
@@ -504,7 +508,6 @@ class TransactionController extends Controller
         $perPage = min($perPage, 100); // Limit to 100 items per page
 
         $transactions = $query->paginate($perPage);
-
         // Add statistics
         $stats = $this->getTransactionStats($request);
 
@@ -543,6 +546,9 @@ class TransactionController extends Controller
             $query->where('transaction_type', $request->type);
         }
 
+        if ($request->has('location') && $request->location) {
+            $query->where('location', $request->location);
+        }
         return [
             'total' => $query->count(),
             'pending' => (clone $query)->where('transaction_status', 'pending')->count(),
@@ -795,11 +801,15 @@ class TransactionController extends Controller
         if ($request->has('type') && $request->type !== 'all') {
             $query->where('type', $request->type);
         }
+        if ($request->has('location') && $request->location) {
+            $query->where('location', $request->location);
+        }
 
         // Optional: filter by customer ID directly
         if ($request->has('customer_id') && is_numeric($request->customer_id)) {
             $query->where('customer_id', $request->customer_id);
         }
+
 
         return $query;
 

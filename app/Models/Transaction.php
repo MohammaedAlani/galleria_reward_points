@@ -14,6 +14,7 @@ class Transaction extends Model
         'customer_id',
         'add_by',
         'approved_by',
+        'location',
         'transaction_type',
         'transaction_date',
         'transaction_amount',

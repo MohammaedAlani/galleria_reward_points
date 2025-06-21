@@ -16,6 +16,7 @@ return new class extends Migration
             $table->foreignId('customer_id')->constrained()->onDelete('cascade');
             $table->string('add_by')->nullable();
             $table->string('approved_by')->nullable();
+            $table->string('location')->nullable();
             $table->string('transaction_type')->nullable();
             $table->string('transaction_date')->nullable();
             $table->string('transaction_amount')->nullable();
