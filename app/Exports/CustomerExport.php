@@ -31,12 +31,17 @@ class CustomerExport implements FromCollection, WithHeadings, WithMapping, WithE
 
     public function map($customer): array
     {
-        // Calculate balance
         $balance = $customer->total_points - $customer->total_spent;
 
-        // Accumulate totals for summary row
-        $this->totalPoints += $customer->total_points;
-        $this->totalSpent += $customer->total_spent;
+        // Clean dates: if invalid, return empty string or null
+        $cleanDate = function ($dateStr) {
+            // Try to parse date, else return empty string
+            try {
+                return $dateStr ? \Carbon\Carbon::parse($dateStr)->format('Y-m-d') : '';
+            } catch (\Exception $e) {
+                return '';
+            }
+        };
 
         return [
             $customer->id,
@@ -48,11 +53,11 @@ class CustomerExport implements FromCollection, WithHeadings, WithMapping, WithE
             $customer->total_spent,
             $balance,
             $customer->last_transaction,
-            $customer->last_transaction_date,
+            $cleanDate($customer->last_transaction_date),
             $customer->last_transaction_amount,
-            $customer->deleted_at,
-            $customer->created_at,
-            $customer->updated_at,
+            $cleanDate($customer->deleted_at),
+            $cleanDate($customer->created_at),
+            $cleanDate($customer->updated_at),
         ];
     }
 
