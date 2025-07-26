@@ -16,6 +16,16 @@ class ExportCustomersAndMail extends Command
 
     public function handle()
     {
+        // Set memory limit to unlimited for large exports
+        ini_set('memory_limit', '-1');
+
+        // Set maximum execution time to unlimited for large exports
+        set_time_limit(0);
+
+        // Set the default timezone to Asia/Baghdad
+        date_default_timezone_set('Asia/Baghdad');
+        
+
         $fileName = 'customers_export_' . now()->format('Ymd_His') . '.xlsx';
         $filePath = 'exports/' . $fileName;
 
