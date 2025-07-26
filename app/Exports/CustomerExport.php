@@ -4,9 +4,9 @@ namespace App\Exports;
 
 use App\Models\Customer;
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Events\AfterSheet;
 
 class CustomerExport implements FromCollection, WithHeadings, WithMapping, WithEvents
