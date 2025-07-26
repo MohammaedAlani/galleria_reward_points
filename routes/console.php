@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 
@@ -8,5 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 
-// call this export:customers-mail every start day
-Artisan::command('export:customers-mail', function () {})->dailyAt('00:00');
+Schedule::command('export:customers-mail')->dailyAt('00:00');

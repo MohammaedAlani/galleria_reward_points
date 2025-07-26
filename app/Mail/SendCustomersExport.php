@@ -11,18 +11,21 @@ class SendCustomersExport extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public $filePath;
+    public string $filePath;
 
-    public function __construct($filePath)
+    public function __construct(string $filePath)
     {
         $this->filePath = $filePath;
     }
 
     public function build()
     {
-        return $this->subject('Exported Customers Report')
-            ->attach(Storage::path($this->filePath))
-            ->view('emails.customer_export');
+        return $this->subject('Galleria Customer Export Report')
+            ->view('emails.customer_export')
+            ->attach(Storage::path($this->filePath), [
+                'as' => 'customers_export.xlsx',
+                'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]);
     }
 }
 
