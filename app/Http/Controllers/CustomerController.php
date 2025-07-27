@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\CustomersExport;
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Customer;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Maatwebsite\Excel\Facades\Excel;
 
 class CustomerController extends Controller
 {
@@ -387,6 +389,7 @@ class CustomerController extends Controller
      */
     public function export(Request $request)
     {
+
         try {
             set_time_limit(300); // 5 minutes for large exports
             ini_set('memory_limit', '512M');
@@ -412,8 +415,15 @@ class CustomerController extends Controller
                 return $this->enrichCustomerData($customer);
             });
 
-            // Enhanced CSV headers
-            $csvData = $this->prepareExportData($enrichedCustomers);
+            // Prepare export info
+            $exportInfo = [
+                'generated_at' => now()->toISOString(),
+                'generated_by' => auth()->user()->name ?? 'مستخدم غير معروف',
+                'filters_applied' => $this->getAppliedFilters($request),
+                'total_records' => count($enrichedCustomers)
+            ];
+
+            $filename = 'customers_export_' . date('Y-m-d_H-i-s') . '.xlsx';
 
             // Log export activity
             Log::info('Customer export completed', [
@@ -422,20 +432,20 @@ class CustomerController extends Controller
                 'filters_applied' => $this->getAppliedFilters($request)
             ]);
 
+            // Store file temporarily
+            $filePath = 'exports/' . $filename;
+            Excel::store(new CustomersExport($enrichedCustomers, $exportInfo), $filePath, 'public');
+
             return response()->json([
                 'status' => 'success',
-                'data' => $csvData,
-                'filename' => 'customers_export_' . date('Y-m-d_H-i-s') . '.xlsx',
+                'download_url' => route('download.export', ['filename' => $filename]),
+                'filename' => $filename,
                 'total_records' => count($enrichedCustomers),
-                'export_info' => [
-                    'generated_at' => now()->toISOString(),
-                    'generated_by' => auth()->user()->name ?? 'مستخدم غير معروف',
-                    'filters_applied' => $this->getAppliedFilters($request)
-                ]
+                'export_info' => $exportInfo
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Export error: ' . $e->getMessage(), [
+            Log::error('Customer export error: ' . $e->getMessage(), [
                 'user_id' => auth()->id(),
                 'filters' => $request->all()
             ]);
@@ -445,6 +455,64 @@ class CustomerController extends Controller
                 'message' => 'فشل في تصدير البيانات: ' . $e->getMessage(),
             ], 500);
         }
+//        try {
+//            set_time_limit(300); // 5 minutes for large exports
+//            ini_set('memory_limit', '512M');
+//
+//            $query = Customer::query();
+//            $this->applyFilters($query, $request);
+//
+//            // Limit export size for performance
+//            $maxExportSize = config('points.max_export_records', 10000);
+//            $totalCount = $query->count();
+//
+//            if ($totalCount > $maxExportSize) {
+//                return response()->json([
+//                    'status' => 'error',
+//                    'message' => "حجم التصدير كبير جداً ({$totalCount} سجل). الحد الأقصى هو {$maxExportSize} سجل",
+//                ], 422);
+//            }
+//
+//            // Get customers with transaction counts
+//            $customers = $query->withCount('transactions')->get();
+//
+//            $enrichedCustomers = $customers->map(function ($customer) {
+//                return $this->enrichCustomerData($customer);
+//            });
+//
+//            // Enhanced CSV headers
+//            $csvData = $this->prepareExportData($enrichedCustomers);
+//
+//            // Log export activity
+//            Log::info('Customer export completed', [
+//                'exported_by' => auth()->id(),
+//                'record_count' => count($enrichedCustomers),
+//                'filters_applied' => $this->getAppliedFilters($request)
+//            ]);
+//
+//            return response()->json([
+//                'status' => 'success',
+//                'data' => $csvData,
+//                'filename' => 'customers_export_' . date('Y-m-d_H-i-s') . '.xlsx',
+//                'total_records' => count($enrichedCustomers),
+//                'export_info' => [
+//                    'generated_at' => now()->toISOString(),
+//                    'generated_by' => auth()->user()->name ?? 'مستخدم غير معروف',
+//                    'filters_applied' => $this->getAppliedFilters($request)
+//                ]
+//            ]);
+//
+//        } catch (\Exception $e) {
+//            Log::error('Export error: ' . $e->getMessage(), [
+//                'user_id' => auth()->id(),
+//                'filters' => $request->all()
+//            ]);
+//
+//            return response()->json([
+//                'status' => 'error',
+//                'message' => 'فشل في تصدير البيانات: ' . $e->getMessage(),
+//            ], 500);
+//        }
     }
 
     /**

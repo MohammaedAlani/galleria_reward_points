@@ -6,6 +6,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\downloadExcelController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
 
@@ -103,6 +104,8 @@ Route::prefix('v1')->group(function () {
     });
 });
 
+Route::get('/download-export/{filename}', [downloadExcelController::class, 'downloadExport'])
+    ->name('download.export');
 // ============================================
 // ALTERNATIVE APPROACH: Using Route::group with prefix
 // This can help avoid conflicts

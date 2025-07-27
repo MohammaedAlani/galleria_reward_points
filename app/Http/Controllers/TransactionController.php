@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\TransactionsExport;
 use App\Models\Customer;
 use Carbon\Carbon;
 use App\Models\Transaction;
@@ -10,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Maatwebsite\Excel\Excel;
 
 class TransactionController extends Controller
 {
@@ -251,12 +253,13 @@ class TransactionController extends Controller
 
     public function bulkAction(Request $request){
 
+
         try {
-            set_time_limit(300); // Allow up to 5 minutes
-            ini_set('memory_limit', '512M'); // Increase memory for large exports
+            set_time_limit(300);
+            ini_set('memory_limit', '512M');
 
             $query = Transaction::query();
-            $this->applyTransactionFilters($query, $request); // Apply filters like date, status, customer, etc.
+            $this->applyTransactionFilters($query, $request);
 
             $maxExportSize = config('points.max_export_records', 10000);
             $totalCount = $query->count();
@@ -268,13 +271,31 @@ class TransactionController extends Controller
                 ], 422);
             }
 
-            // Load transactions with relationships if needed (e.g., customer)
             $transactions = $query->with('customer')->get();
             $enrichedTransactions = $transactions->map(function ($transaction) {
                 return $this->enrichCustomerData($transaction);
             });
 
-            $csvData = $this->prepareExportData($enrichedTransactions);
+            // Debug: Check if we have data
+            Log::info('Export Debug', [
+                'query_count' => $totalCount,
+                'transactions_loaded' => $transactions->count(),
+                'enriched_count' => $enrichedTransactions->count(),
+                'first_transaction' => $enrichedTransactions->first()
+            ]);
+
+            $exportInfo = [
+                'generated_at' => now()->toISOString(),
+                'generated_by' => auth()->user()->name ?? 'مستخدم غير معروف',
+                'filters_applied' => $this->getAppliedFilters($request),
+                'total_records' => count($enrichedTransactions)
+            ];
+
+            $filename = 'transactions_export_' . date('Y-m-d_H-i-s') . '.xlsx';
+
+            // Store file temporarily
+            $filePath = 'exports/' . $filename;
+            \Maatwebsite\Excel\Facades\Excel::store(new TransactionsExport($enrichedTransactions, $exportInfo), $filePath, 'public');
 
             Log::info('Transaction export completed', [
                 'exported_by' => auth()->id(),
@@ -284,14 +305,10 @@ class TransactionController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'data' => $csvData,
-                'filename' => 'transactions_export_' . date('Y-m-d_H-i-s') . '.xlsx',
+                'download_url' => route('download.export', ['filename' => $filename]),
+                'filename' => $filename,
                 'total_records' => count($enrichedTransactions),
-                'export_info' => [
-                    'generated_at' => now()->toISOString(),
-                    'generated_by' => auth()->user()->name ?? 'مستخدم غير معروف',
-                    'filters_applied' => $this->getAppliedFilters($request),
-                ]
+                'export_info' => $exportInfo
             ]);
 
         } catch (\Exception $e) {
@@ -305,6 +322,61 @@ class TransactionController extends Controller
                 'message' => 'فشل في تصدير البيانات: ' . $e->getMessage(),
             ], 500);
         }
+
+//        try {
+//            set_time_limit(300); // Allow up to 5 minutes
+//            ini_set('memory_limit', '512M'); // Increase memory for large exports
+//
+//            $query = Transaction::query();
+//            $this->applyTransactionFilters($query, $request); // Apply filters like date, status, customer, etc.
+//
+//            $maxExportSize = config('points.max_export_records', 10000);
+//            $totalCount = $query->count();
+//
+//            if ($totalCount > $maxExportSize) {
+//                return response()->json([
+//                    'status' => 'error',
+//                    'message' => "حجم التصدير كبير جداً ({$totalCount} سجل). الحد الأقصى هو {$maxExportSize} سجل",
+//                ], 422);
+//            }
+//
+//            // Load transactions with relationships if needed (e.g., customer)
+//            $transactions = $query->with('customer')->get();
+//            $enrichedTransactions = $transactions->map(function ($transaction) {
+//                return $this->enrichCustomerData($transaction);
+//            });
+//
+//            $csvData = $this->prepareExportData($enrichedTransactions);
+//
+//            Log::info('Transaction export completed', [
+//                'exported_by' => auth()->id(),
+//                'record_count' => count($enrichedTransactions),
+//                'filters_applied' => $this->getAppliedFilters($request),
+//            ]);
+//
+//            return response()->json([
+//                'status' => 'success',
+//                'data' => $csvData,
+//                'filename' => 'transactions_export_' . date('Y-m-d_H-i-s') . '.csv',
+//                'total_records' => count($enrichedTransactions),
+//                'export_info' => [
+//                    'generated_at' => now()->toISOString(),
+//                    'generated_by' => auth()->user()->name ?? 'مستخدم غير معروف',
+//                    'filters_applied' => $this->getAppliedFilters($request),
+//                ]
+//            ]);
+//
+//        } catch (\Exception $e) {
+//            Log::error('Transaction export error: ' . $e->getMessage(), [
+//                'user_id' => auth()->id(),
+//                'filters' => $request->all()
+//            ]);
+//
+//            return response()->json([
+//                'status' => 'error',
+//                'message' => 'فشل في تصدير البيانات: ' . $e->getMessage(),
+//            ], 500);
+//        }
 //        ----------------------------
 //        // Debug logging
 //        Log::info('Bulk action called', [
@@ -319,61 +391,6 @@ class TransactionController extends Controller
 //            'transaction_ids' => 'required|array|min:1|max:100',
 //            'transaction_ids.*' => 'integer|exists:transactions,id'
 //        ]);
-////
-//        if ($validator->fails()) {
-//            Log::warning('Bulk action validation failed', [
-//                'errors' => $validator->errors(),
-//                'request' => $request->all()
-//            ]);
-//
-//            return response()->json([
-//                'status' => 'error',
-//                'message' => 'بيانات غير صحيحة',
-//                'errors' => $validator->errors()
-//            ], 422);
-//        }
-//
-//        try {
-////            // Check if customers exist
-//            $existingCustomers = Transaction::whereIn('id', $request->transaction_ids)->count();
-//            if ($existingCustomers !== count($request->transaction_ids)) {
-//                return response()->json([
-//                    'status' => 'error',
-//                    'message' => 'بعض الزبائن المحددين غير موجودين',
-//                    'found' => $existingCustomers,
-//                    'requested' => count($request->transaction_ids)
-//                ], 422);
-//            }
-//            switch ($request->action) {
-//
-//                case 'export':
-//                    return $this->performBulkExport($request->transaction_ids);
-//
-//                default:
-//                    return response()->json([
-//                        'status' => 'error',
-//                        'message' => 'إجراء غير مدعوم: ' . $request->action
-//                    ], 422);
-//            }
-//
-//        } catch (\Exception $e) {
-//            Log::error('Bulk action error: ' . $e->getMessage(), [
-//                'action' => $request->action,
-//                'transaction_ids' => $request->transaction_ids,
-//                'user_id' => auth()->id(),
-//                'trace' => $e->getTraceAsString()
-//            ]);
-//
-//            return response()->json([
-//                'status' => 'error',
-//                'message' => 'فشل في تنفيذ العملية المجمعة: ' . $e->getMessage(),
-//                'debug' => config('app.debug') ? [
-//                    'file' => $e->getFile(),
-//                    'line' => $e->getLine(),
-//                    'trace' => $e->getTraceAsString()
-//                ] : null
-//            ], 500);
-//        }
     }
     /**
      * Get customer's transaction history
