@@ -3,7 +3,7 @@ name: Deploy - User Acceptance Testing
 on:
   push:
     branches:
-      - develop
+      - prod
 
 jobs:
   deploy:
