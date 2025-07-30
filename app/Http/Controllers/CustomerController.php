@@ -251,13 +251,13 @@ class CustomerController extends Controller
             }
 
             // Check if customer has high value
-            $pointsThreshold = config('points.high_value_customer_threshold', 5000);
-            if ($customer->total_points >= $pointsThreshold) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'لا يمكن حذف زبون ذو نقاط عالية بدون موافقة إدارية',
-                ], 422);
-            }
+//            $pointsThreshold = config('points.high_value_customer_threshold', 5000);
+//            if ($customer->total_points >= $pointsThreshold) {
+//                return response()->json([
+//                    'status' => 'error',
+//                    'message' => 'لا يمكن حذف زبون ذو نقاط عالية بدون موافقة إدارية',
+//                ], 422);
+//            }
 
             // Store customer data for logging
             $customerData = $customer->toArray();
