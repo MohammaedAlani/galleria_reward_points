@@ -5,12 +5,9 @@ namespace App\Exports;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class TransactionsExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize
+class TransactionsExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize
 {
     protected $transactions;
     protected $exportInfo;
@@ -29,66 +26,57 @@ class TransactionsExport implements FromCollection, WithHeadings, WithMapping, W
     public function headings(): array
     {
         return [
-            'اسم الزبون', 'نوع الحركة', 'المبلغ ', 'رقم الحركة',
-            'تاريخ الحركة', 'اضيفت بواسطة', 'تمت الموافقة بواسطة ', 'حالة الحركة'
+            'العميل',
+            'الموقع',
+            'نوع المعاملة',
+            'رقم المعاملة',
+            'قيمة المعاملة',
+            'تاريخ المعاملة',
+            'المستخدم الذي وافق على المعاملة',
+            'المستخدم الذي أضاف المعاملة',
         ];
     }
 
     public function map($transaction): array
     {
         return [
-            $transaction->customer_id,
-            $transaction->transaction_type,
+            $transaction->customer->name ?? 'غير محدد',
+            $this->mapTransactionLocation($transaction->location),
+            $this->mapTransactionType($transaction->transaction_type),
+            $transaction->transaction_number,
             $transaction->transaction_amount,
-            $transaction->transaction_number ,
-            $transaction->transaction_date ,
-            $transaction->add_by ,
-            $transaction->approved_by ,
-            $transaction->transaction_status ,
+            $transaction->transaction_date,
+            $transaction->approvedByUser?->name ?? 'غير محدد',
+            $transaction->addByUser?->name ?? 'غير محدد',
         ];
     }
 
-    public function styles(Worksheet $sheet)
-    {
-        return [
-            1 => [
-                'font' => ['bold' => true, 'size' => 12],
-                'fill' => [
-                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                    'startColor' => ['argb' => 'FF4472C4']
-                ],
-                'font' => ['color' => ['argb' => 'FFFFFFFF'], 'bold' => true],
-                'alignment' => [
-                    'horizontal' => Alignment::HORIZONTAL_CENTER,
-                    'vertical' => Alignment::VERTICAL_CENTER,
-                ]
-            ],
-
-            // Style all cells
-            'A:N' => [
-                'alignment' => [
-                    'horizontal' => Alignment::HORIZONTAL_RIGHT, // RTL support
-                    'vertical' => Alignment::VERTICAL_CENTER,
-                ]
-            ]
-        ];
-    }
-
-    private function getStatusText($status)
-    {
-        if (is_null($status)) {
+    private function mapTransactionLocation($location){
+        if (is_null($location)) {
             return 'غير محدد';
         }
 
-        $statusMap = [
-            'pending' => 'قيد الانتظار',
-            'completed' => 'مكتملة',
-            'cancelled' => 'ملغية',
-            'failed' => 'فاشلة',
-            'approved' => 'موافق عليه',
-            'rejected' => 'مرفوض'
+        $locationMap = [
+            'karada' => 'الكرادة',
+            'Jadriyah' => "الجادرية",
+            'saydiya' => 'السيدية'
         ];
 
-        return $statusMap[$status] ?? $status;
+        return $locationMap[$location] ?? $location;
+    }
+
+    private function mapTransactionType($transaction_type)
+    {
+        if (is_null($transaction_type)) {
+            return 'غير محدد';
+        }
+
+        $typeMap = [
+            'add' =>  'إضافة',
+            'return' => 'إرجاع',
+            'use' => 'خصم',
+        ];
+
+        return $typeMap[$transaction_type] ?? $transaction_type;
     }
 }
