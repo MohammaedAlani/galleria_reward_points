@@ -397,50 +397,27 @@ class CustomerController extends Controller
             $query = Customer::query();
             $this->applyFilters($query, $request);
 
-            // Limit export size for performance
-            $maxExportSize = config('points.max_export_records', 10000);
-            $totalCount = $query->count();
-
-            if ($totalCount > $maxExportSize) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "حجم التصدير كبير جداً ({$totalCount} سجل). الحد الأقصى هو {$maxExportSize} سجل",
-                ], 422);
-            }
-
             // Get customers with transaction counts
             $customers = $query->withCount('transactions')->get();
-
-            $enrichedCustomers = $customers->map(function ($customer) {
-                return $this->enrichCustomerData($customer);
-            });
 
             // Prepare export info
             $exportInfo = [
                 'generated_at' => now()->toISOString(),
                 'generated_by' => auth()->user()->name ?? 'مستخدم غير معروف',
                 'filters_applied' => $this->getAppliedFilters($request),
-                'total_records' => count($enrichedCustomers)
             ];
 
             $filename = 'customers_export_' . date('Y-m-d_H-i-s') . '.xlsx';
 
-            // Log export activity
-            Log::info('Customer export completed', [
-                'exported_by' => auth()->id(),
-                'record_count' => count($enrichedCustomers),
-                'filters_applied' => $this->getAppliedFilters($request)
-            ]);
-
             // Store file temporarily
             $filePath = 'exports/' . $filename;
-            Excel::store(new CustomersExport($enrichedCustomers, $exportInfo), $filePath, 'public');
+            Excel::store(new CustomersExport($customers, $exportInfo), $filePath, 'public');
 
             return response()->json([
                 'status' => 'success',
                 'download_url' => route('download.export', ['filename' => $filename]),
                 'filename' => $filename,
-                'total_records' => count($enrichedCustomers),
+                'total_records' => count($customers),
                 'export_info' => $exportInfo
             ]);
 
