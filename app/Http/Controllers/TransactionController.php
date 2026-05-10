@@ -258,16 +258,6 @@ class TransactionController extends Controller
             $query = Transaction::query();
             $this->applyTransactionFilters($query, $request);
 
-            $maxExportSize = config('points.max_export_records', 10000);
-            $totalCount = $query->count();
-
-            if ($totalCount > $maxExportSize) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "حجم التصدير كبير جداً ({$totalCount} سجل). الحد الأقصى هو {$maxExportSize} سجل",
-                ], 422);
-            }
-
             $transactions = $query->with('customer', 'addByUser', 'approvedByUser')->get();
 
             $exportInfo = [

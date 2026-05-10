@@ -8,6 +8,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\downloadExcelController;
 use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\WhatsappController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -101,6 +102,21 @@ Route::prefix('v1')->group(function () {
         Route::get('transactions/{transaction}', [TransactionController::class, 'show']);
 
         Route::post('transactions/bulk-action', [TransactionController::class, 'bulkAction']);
+
+        // ============================================
+        // WHATSAPP BROADCAST (admin only)
+        // ============================================
+        Route::middleware('admin')->prefix('whatsapp')->group(function () {
+            Route::get('settings', [WhatsappController::class, 'getSettings']);
+            Route::put('settings', [WhatsappController::class, 'saveSettings']);
+            Route::get('qr', [WhatsappController::class, 'getQr']);
+            Route::get('status', [WhatsappController::class, 'getStatus']);
+            Route::post('recipients/preview', [WhatsappController::class, 'previewRecipients']);
+            Route::post('broadcasts', [WhatsappController::class, 'createBroadcast']);
+            Route::get('broadcasts', [WhatsappController::class, 'listBroadcasts']);
+            Route::get('broadcasts/{broadcast}', [WhatsappController::class, 'showBroadcast']);
+            Route::get('broadcasts/{broadcast}/messages', [WhatsappController::class, 'broadcastMessages']);
+        });
     });
 });
 
