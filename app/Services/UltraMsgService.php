@@ -32,9 +32,47 @@ class UltraMsgService
         return $this->get('instance/qrCode');
     }
 
+    /**
+     * Fetches the rendered QR PNG and returns it as a data URL.
+     * Falls back to whatever JSON-shaped response qrCode returns
+     * if /qr returns JSON (some UltraMsg versions do).
+     */
+    public function getQrImageDataUrl(): ?string
+    {
+        $response = Http::get($this->url('instance/qr'), ['token' => $this->token]);
+
+        $contentType = $response->header('Content-Type') ?? '';
+        $body = $response->body();
+
+        if (str_starts_with($contentType, 'image/')) {
+            return 'data:' . $contentType . ';base64,' . base64_encode($body);
+        }
+
+        $json = $response->json();
+        if (is_array($json) && isset($json['error'])) {
+            $err = (string) $json['error'];
+            if ($this->isSubscriptionError($err)) {
+                throw new UltraMsgSubscriptionException($err);
+            }
+            throw new RuntimeException('UltraMsg error: ' . $err);
+        }
+
+        return $json['qrCode'] ?? null;
+    }
+
     public function getStatus(): array
     {
         return $this->get('instance/status');
+    }
+
+    public function getMe(): array
+    {
+        return $this->get('instance/me');
+    }
+
+    public function getSettings(): array
+    {
+        return $this->get('instance/settings');
     }
 
     public function sendChat(string $to, string $body): array
@@ -102,22 +140,38 @@ class UltraMsgService
 
     private function handle(Response $response): array
     {
-        if ($response->failed()) {
-            throw new RuntimeException(
-                'UltraMsg request failed: ' . $response->status() . ' ' . $response->body()
-            );
+        $data = $response->json();
+        $errorMessage = is_array($data) && isset($data['error']) ? (string) $data['error'] : null;
+
+        if ($errorMessage && $this->isSubscriptionError($errorMessage)) {
+            throw new UltraMsgSubscriptionException($errorMessage);
         }
 
-        $data = $response->json();
+        if ($response->failed()) {
+            throw new RuntimeException(
+                'UltraMsg request failed: ' . $response->status() . ' ' . ($errorMessage ?: $response->body())
+            );
+        }
 
         if (!is_array($data)) {
             throw new RuntimeException('UltraMsg returned non-JSON response: ' . $response->body());
         }
 
-        if (isset($data['error'])) {
-            throw new RuntimeException('UltraMsg error: ' . json_encode($data['error']));
+        if ($errorMessage) {
+            throw new RuntimeException('UltraMsg error: ' . $errorMessage);
         }
 
         return $data;
+    }
+
+    private function isSubscriptionError(string $message): bool
+    {
+        $needles = ['non-payment', 'Stopped', 'expired', 'subscription'];
+        foreach ($needles as $n) {
+            if (stripos($message, $n) !== false) {
+                return true;
+            }
+        }
+        return false;
     }
 }
