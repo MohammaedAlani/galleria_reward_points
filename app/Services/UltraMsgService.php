@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Helper\PhoneNormalizer;
-use App\Models\WhatsappSetting;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -14,50 +13,17 @@ class UltraMsgService
     private string $instanceId;
     private string $token;
 
-    public function __construct(?WhatsappSetting $setting = null)
+    public function __construct()
     {
-        $setting ??= WhatsappSetting::current();
+        $this->baseUrl = rtrim((string) config('ultramsg.base_url'), '/');
+        $this->instanceId = (string) config('ultramsg.instance_id');
+        $this->token = (string) config('ultramsg.token');
 
-        if (!$setting->instance_id || !$setting->token) {
-            throw new RuntimeException('UltraMsg instance is not configured.');
+        if (!$this->instanceId || !$this->token) {
+            throw new RuntimeException(
+                'UltraMsg is not configured. Set ULTRAMSG_INSTANCE_ID and ULTRAMSG_TOKEN in your .env.'
+            );
         }
-
-        $this->baseUrl = rtrim(config('ultramsg.base_url'), '/');
-        $this->instanceId = $setting->instance_id;
-        $this->token = $setting->token;
-    }
-
-    public function getQr(): array
-    {
-        return $this->get('instance/qrCode');
-    }
-
-    /**
-     * Fetches the rendered QR PNG and returns it as a data URL.
-     * Falls back to whatever JSON-shaped response qrCode returns
-     * if /qr returns JSON (some UltraMsg versions do).
-     */
-    public function getQrImageDataUrl(): ?string
-    {
-        $response = Http::get($this->url('instance/qr'), ['token' => $this->token]);
-
-        $contentType = $response->header('Content-Type') ?? '';
-        $body = $response->body();
-
-        if (str_starts_with($contentType, 'image/')) {
-            return 'data:' . $contentType . ';base64,' . base64_encode($body);
-        }
-
-        $json = $response->json();
-        if (is_array($json) && isset($json['error'])) {
-            $err = (string) $json['error'];
-            if ($this->isSubscriptionError($err)) {
-                throw new UltraMsgSubscriptionException($err);
-            }
-            throw new RuntimeException('UltraMsg error: ' . $err);
-        }
-
-        return $json['qrCode'] ?? null;
     }
 
     public function getStatus(): array

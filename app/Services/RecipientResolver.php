@@ -18,12 +18,30 @@ class RecipientResolver
             'all_active' => $this->fromCustomers(Customer::query()->whereNotNull('phone')),
             'points_threshold' => $this->byPoints($filter),
             'last_transaction' => $this->byLastTransaction($filter),
+            'has_card' => $this->byCard($filter),
             'manual_ids' => $this->fromCustomers(
                 Customer::query()->whereIn('id', $filter['customer_ids'] ?? [])
             ),
             'uploaded_phones' => $this->fromPhones($filter['phones'] ?? []),
             default => throw new InvalidArgumentException("Unknown recipient mode: {$mode}"),
         };
+    }
+
+    private function byCard(array $filter): Collection
+    {
+        $hasCard = ($filter['has_card'] ?? true) ? true : false;
+
+        $query = Customer::query()->whereNotNull('phone');
+
+        if ($hasCard) {
+            $query->whereNotNull('card_number')->where('card_number', '!=', '');
+        } else {
+            $query->where(function ($q) {
+                $q->whereNull('card_number')->orWhere('card_number', '=', '');
+            });
+        }
+
+        return $this->fromCustomers($query);
     }
 
     private function byPoints(array $filter): Collection
