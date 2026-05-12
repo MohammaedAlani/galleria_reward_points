@@ -29,6 +29,12 @@ class PhoneNormalizerTest extends TestCase
         $this->assertSame('+9647809000055', PhoneNormalizer::normalize('+9647809000055'));
     }
 
+    public function test_normalizes_bare_international_starting_with_country_code(): void
+    {
+        $this->assertSame('+9647800010330', PhoneNormalizer::normalize('9647800010330'));
+        $this->assertSame('+9647809000055', PhoneNormalizer::normalize('9647809000055'));
+    }
+
     public function test_strips_whitespace_and_dashes(): void
     {
         $this->assertSame('+9647809000055', PhoneNormalizer::normalize('0780-900-0055'));

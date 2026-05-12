@@ -34,6 +34,12 @@ class PhoneNormalizer
             return self::validateE164('+' . $defaultCc . $cleaned);
         }
 
+        // Bare international: starts with default country code (e.g. 964…),
+        // total length matches expected 12–14 digits.
+        if (str_starts_with($cleaned, $defaultCc) && preg_match('/^\d{11,15}$/', $cleaned)) {
+            return self::validateE164('+' . $cleaned);
+        }
+
         return null;
     }
 
