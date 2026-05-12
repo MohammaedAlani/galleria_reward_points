@@ -2,10 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Helper\PhoneNormalizer;
 use App\Jobs\SendWhatsappBroadcast;
 use App\Models\WhatsappBroadcast;
-use App\Models\WhatsappSetting;
 use App\Services\RecipientResolver;
 use App\Services\UltraMsgService;
 use App\Services\UltraMsgSubscriptionException;
@@ -15,87 +13,14 @@ use Throwable;
 
 class WhatsappController extends Controller
 {
-    public function getSettings(): JsonResponse
-    {
-        $setting = WhatsappSetting::current();
-
-        return response()->json([
-            'status' => 'success',
-            'data' => [
-                'instance_id' => $setting->instance_id,
-                'has_token' => (bool) $setting->token,
-                'status' => $setting->status,
-                'connected_at' => $setting->connected_at,
-            ],
-        ]);
-    }
-
-    public function saveSettings(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'instance_id' => 'required|string|max:64',
-            'token' => 'required|string|max:128',
-        ]);
-
-        $setting = WhatsappSetting::current();
-        $setting->update([
-            'instance_id' => $data['instance_id'],
-            'token' => $data['token'],
-            'status' => null,
-            'qr' => null,
-            'connected_at' => null,
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Saved.',
-        ]);
-    }
-
-    public function getQr(): JsonResponse
-    {
-        try {
-            $setting = WhatsappSetting::current();
-            $service = new UltraMsgService($setting);
-
-            $qrDataUrl = $service->getQrImageDataUrl();
-            $status = $service->getStatus();
-
-            $accountStatus = $status['accountStatus']['status'] ?? null;
-            $setting->update([
-                'qr' => $qrDataUrl,
-                'qr_fetched_at' => now(),
-                'status' => $accountStatus,
-                'connected_at' => $accountStatus === 'authenticated' ? now() : $setting->connected_at,
-            ]);
-
-            return response()->json([
-                'status' => 'success',
-                'data' => [
-                    'qr' => $qrDataUrl,
-                    'account_status' => $accountStatus,
-                ],
-            ]);
-        } catch (UltraMsgSubscriptionException $e) {
-            $this->markSubscriptionExpired();
-            return $this->subscriptionExpiredResponse($e);
-        } catch (Throwable $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'فشل جلب رمز QR: ' . $e->getMessage(),
-            ], 422);
-        }
-    }
-
     public function getStatus(): JsonResponse
     {
         try {
-            $setting = WhatsappSetting::current();
-            $service = new UltraMsgService($setting);
+            $service = new UltraMsgService();
             $status = $service->getStatus();
             $me = null;
 
-            $accountStatus = $status['accountStatus']['status'] ?? null;
+            $accountStatus = $this->extractAccountStatus($status);
             if ($accountStatus === 'authenticated') {
                 try {
                     $me = $service->getMe();
@@ -103,11 +28,6 @@ class WhatsappController extends Controller
                     // me is optional
                 }
             }
-
-            $setting->update([
-                'status' => $accountStatus,
-                'connected_at' => $accountStatus === 'authenticated' ? ($setting->connected_at ?? now()) : $setting->connected_at,
-            ]);
 
             return response()->json([
                 'status' => 'success',
@@ -118,7 +38,6 @@ class WhatsappController extends Controller
                 ],
             ]);
         } catch (UltraMsgSubscriptionException $e) {
-            $this->markSubscriptionExpired();
             return $this->subscriptionExpiredResponse($e);
         } catch (Throwable $e) {
             return response()->json([
@@ -128,12 +47,18 @@ class WhatsappController extends Controller
         }
     }
 
-    private function markSubscriptionExpired(): void
+    /**
+     * UltraMsg's /instance/status response shape varies by version.
+     * Known shapes:
+     *   { "status": { "accountStatus": { "status": "authenticated", "substatus": "connected" } } }
+     *   { "accountStatus": { "status": "authenticated", "substatus": "connected" } }
+     *   { "status": "authenticated" }
+     */
+    private function extractAccountStatus(array $payload): ?string
     {
-        WhatsappSetting::current()->update([
-            'status' => 'subscription_expired',
-            'qr' => null,
-        ]);
+        return $payload['status']['accountStatus']['status']
+            ?? $payload['accountStatus']['status']
+            ?? (is_string($payload['status'] ?? null) ? $payload['status'] : null);
     }
 
     private function subscriptionExpiredResponse(UltraMsgSubscriptionException $e): JsonResponse
@@ -257,7 +182,7 @@ class WhatsappController extends Controller
         $filter ??= $request->input('recipient_filter', []);
         $mode = $filter['mode'] ?? null;
 
-        if (!in_array($mode, ['all_active', 'points_threshold', 'last_transaction', 'manual_ids', 'uploaded_phones'])) {
+        if (!in_array($mode, ['all_active', 'points_threshold', 'last_transaction', 'has_card', 'manual_ids', 'uploaded_phones'])) {
             abort(response()->json([
                 'status' => 'error',
                 'message' => 'Invalid recipient_filter.mode',

@@ -107,9 +107,6 @@ Route::prefix('v1')->group(function () {
         // WHATSAPP BROADCAST (admin only)
         // ============================================
         Route::middleware('admin')->prefix('whatsapp')->group(function () {
-            Route::get('settings', [WhatsappController::class, 'getSettings']);
-            Route::put('settings', [WhatsappController::class, 'saveSettings']);
-            Route::get('qr', [WhatsappController::class, 'getQr']);
             Route::get('status', [WhatsappController::class, 'getStatus']);
             Route::post('recipients/preview', [WhatsappController::class, 'previewRecipients']);
             Route::post('broadcasts', [WhatsappController::class, 'createBroadcast']);
