@@ -11,4 +11,6 @@ return [
     'default_country_code' => env('ULTRAMSG_DEFAULT_CC', '964'),
 
     'media_disk' => env('ULTRAMSG_MEDIA_DISK', 'public'),
+
+    'media_base_url' => env('ULTRAMSG_MEDIA_BASE_URL'),
 ];
