@@ -107,7 +107,11 @@ class UltraMsgService
     private function handle(Response $response): array
     {
         $data = $response->json();
-        $errorMessage = is_array($data) && isset($data['error']) ? (string) $data['error'] : null;
+        $errorMessage = null;
+        if (is_array($data) && isset($data['error'])) {
+            $error = $data['error'];
+            $errorMessage = is_scalar($error) ? (string) $error : json_encode($error, JSON_UNESCAPED_UNICODE);
+        }
 
         if ($errorMessage && $this->isSubscriptionError($errorMessage)) {
             throw new UltraMsgSubscriptionException($errorMessage);
