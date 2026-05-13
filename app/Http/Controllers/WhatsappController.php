@@ -110,7 +110,8 @@ class WhatsappController extends Controller
         if ($request->hasFile('media') && in_array($data['media_type'], ['image', 'video'])) {
             $disk = config('ultramsg.media_disk', 'public');
             $path = $request->file('media')->store('whatsapp', $disk);
-            $mediaUrl = asset('storage/' . $path);
+            $base = rtrim(config('ultramsg.media_base_url') ?: $request->getSchemeAndHttpHost(), '/');
+            $mediaUrl = $base . '/storage/' . ltrim($path, '/');
         }
 
         if ($data['media_type'] === 'image' || $data['media_type'] === 'video') {
