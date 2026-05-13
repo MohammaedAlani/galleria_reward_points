@@ -73,6 +73,7 @@ class WhatsappController extends Controller
 
     public function previewRecipients(Request $request, RecipientResolver $resolver): JsonResponse
     {
+        $this->decodeRecipientFilter($request);
         $filter = $this->validateFilter($request);
 
         $recipients = $resolver->resolve($filter);
@@ -92,6 +93,8 @@ class WhatsappController extends Controller
 
     public function createBroadcast(Request $request): JsonResponse
     {
+        $this->decodeRecipientFilter($request);
+
         $data = $request->validate([
             'body' => 'nullable|string|max:4096',
             'media_type' => 'required|in:text,image,video,link',
@@ -175,6 +178,17 @@ class WhatsappController extends Controller
             'status' => 'success',
             'data' => $query->orderByDesc('id')->paginate(50),
         ]);
+    }
+
+    private function decodeRecipientFilter(Request $request): void
+    {
+        $value = $request->input('recipient_filter');
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) {
+                $request->merge(['recipient_filter' => $decoded]);
+            }
+        }
     }
 
     private function validateFilter(Request $request, ?array $filter = null): array
