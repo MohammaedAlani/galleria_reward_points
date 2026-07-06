@@ -107,11 +107,12 @@ jobs:
         run: |
           set -e
           cd platform
-          sed -i "s|registry.cloudfares.net/galleria/app:prod-latest|registry.cloudfares.net/galleria/app:${{ needs.build-and-push.outputs.image_tag_sha }}|g" \
+          sed -i "s|registry.cloudfares.net/galleria/app:[a-zA-Z0-9._-]*|registry.cloudfares.net/galleria/app:${{ needs.build-and-push.outputs.image_tag_sha }}|g" \
             apps/galleria/10-app.yaml apps/galleria/40-scheduler.yaml
           git config user.name  "ci-bot"
           git config user.email "ci-bot@cloudfares.net"
           git add apps/galleria/10-app.yaml apps/galleria/40-scheduler.yaml
+          git diff --cached --quiet && { echo "No image tag change — skipping commit"; exit 0; }
           git commit -m "galleria prod: bump to ${{ needs.build-and-push.outputs.image_tag_sha }}"
 
       - name: Push to cloudfares-platform
