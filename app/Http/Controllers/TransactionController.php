@@ -347,70 +347,7 @@ class TransactionController extends Controller
             'approvedByUser:id,name,email',
         ]);
 
-        // Filter by status
-        if ($request->has('status') && $request->status !== 'all') {
-            $query->where('transaction_status', $request->status);
-        }
-
-        // Filter by transaction type
-        if ($request->has('type') && $request->type !== 'all') {
-            $query->where('transaction_type', $request->type);
-        }
-
-        // Filter by date range
-        if ($request->has('date_from') && $request->date_from) {
-            $query->whereDate('transaction_date', '>=', $request->date_from);
-        }
-
-        if ($request->has('date_to') && $request->date_to) {
-            $query->whereDate('transaction_date', '<=', $request->date_to);
-        }
-
-        // Filter by specific date
-        if ($request->has('date') && $request->date) {
-            $query->whereDate('transaction_date', $request->date);
-        }
-        if ($request->has('location') && $request->location) {
-
-            $query->where('location', $request->location);
-        }
-        // Search functionality
-        if ($request->has('search') && $request->search) {
-            $searchTerm = $request->search;
-            $query->where(function($q) use ($searchTerm) {
-                $q->where('transaction_number', 'like', "%{$searchTerm}%")
-                    ->orWhereHas('customer', function($customerQuery) use ($searchTerm) {
-                        $customerQuery->where('name', 'like', "%{$searchTerm}%")
-                            ->orWhere('phone', 'like', "%{$searchTerm}%")
-                            ->orWhere('card_number', 'like', "%{$searchTerm}%");
-                    })
-                    ->orWhereHas('addByUser', function($userQuery) use ($searchTerm) {
-                        $userQuery->where('name', 'like', "%{$searchTerm}%");
-                    });
-            });
-        }
-
-        // Filter by customer ID
-        if ($request->has('customer_id') && $request->customer_id) {
-            $query->where('customer_id', $request->customer_id);
-        }
-
-        // Filter by amount range
-        if ($request->has('amount_from') && $request->amount_from) {
-            $query->where('transaction_amount', '>=', $request->amount_from);
-        }
-
-        if ($request->has('amount_to') && $request->amount_to) {
-            $query->where('transaction_amount', '<=', $request->amount_to);
-        }
-
-        // Filter by staff member
-        if ($request->has('staff_id') && $request->staff_id) {
-            $query->where(function($q) use ($request) {
-                $q->where('add_by', $request->staff_id)
-                    ->orWhere('approved_by', $request->staff_id);
-            });
-        }
+        $this->applyTransactionFilters($query, $request);
 
         // Sort options
         $sortBy = $request->get('sort_by', 'created_at');
@@ -422,6 +359,7 @@ class TransactionController extends Controller
         } else {
             $query->orderBy('created_at', 'desc');
         }
+
 
         // Pagination
         $perPage = $request->get('per_page', 10);
@@ -680,67 +618,85 @@ class TransactionController extends Controller
     }
 
 
-        private function applyTransactionFilters($query, Request $request)
+    /**
+     * Shared by index() and bulkAction() so the export always matches the list the user sees.
+     */
+    private function applyTransactionFilters($query, Request $request)
     {
-        // Search by transaction ID, notes, or related customer name
+        // Filter by status
+        if ($request->has('status') && $request->status !== 'all') {
+            $query->where('transaction_status', $request->status);
+        }
+
+        // Filter by transaction type
+        if ($request->has('type') && $request->type !== 'all') {
+            $query->where('transaction_type', $request->type);
+        }
+
+        // Filter by date range
+        if ($request->has('date_from') && $request->date_from) {
+            $query->whereDate('transaction_date', '>=', $request->date_from);
+        }
+
+        if ($request->has('date_to') && $request->date_to) {
+            $query->whereDate('transaction_date', '<=', $request->date_to);
+        }
+
+        // Filter by specific date
+        if ($request->has('date') && $request->date) {
+            $query->whereDate('transaction_date', $request->date);
+        }
+        if ($request->has('location') && $request->location) {
+
+            $query->where('location', $request->location);
+        }
+        // Search functionality
         if ($request->has('search') && $request->search) {
             $searchTerm = $request->search;
-            $query->where(function ($q) use ($searchTerm) {
-                $q->where('id', $searchTerm) // Exact match for ID
-                ->orWhere('notes', 'like', "%{$searchTerm}%")
-                    ->orWhereHas('customer', function ($subQ) use ($searchTerm) {
-                        $subQ->where('name', 'like', "%{$searchTerm}%");
+            $query->where(function($q) use ($searchTerm) {
+                $q->where('transaction_number', 'like', "%{$searchTerm}%")
+                    ->orWhereHas('customer', function($customerQuery) use ($searchTerm) {
+                        $customerQuery->where('name', 'like', "%{$searchTerm}%")
+                            ->orWhere('phone', 'like', "%{$searchTerm}%")
+                            ->orWhere('card_number', 'like', "%{$searchTerm}%");
+                    })
+                    ->orWhereHas('addByUser', function($userQuery) use ($searchTerm) {
+                        $userQuery->where('name', 'like', "%{$searchTerm}%");
                     });
             });
         }
 
-        // Filter by status (e.g., 'approved', 'pending', 'rejected')
-        if ($request->has('status') && $request->status !== 'all') {
-            $query->where('status', $request->status);
-        }
-
-        // Amount range
-        if ($request->has('amount_min') && is_numeric($request->amount_min)) {
-            $query->where('amount', '>=', $request->amount_min);
-        }
-
-        if ($request->has('amount_max') && is_numeric($request->amount_max)) {
-            $query->where('amount', '<=', $request->amount_max);
-        }
-
-        // Date range
-        if ($request->has('date_from') && $request->date_from) {
-            $query->whereDate('created_at', '>=', $request->date_from);
-        }
-
-        if ($request->has('date_to') && $request->date_to) {
-            $query->whereDate('created_at', '<=', $request->date_to);
-        }
-
-        // Type filter (e.g., 'credit', 'debit')
-        if ($request->has('type') && $request->type !== 'all') {
-            $query->where('type', $request->type);
-        }
-        if ($request->has('location') && $request->location) {
-            $query->where('location', $request->location);
-        }
-
-        // Optional: filter by customer ID directly
-        if ($request->has('customer_id') && is_numeric($request->customer_id)) {
+        // Filter by customer ID
+        if ($request->has('customer_id') && $request->customer_id) {
             $query->where('customer_id', $request->customer_id);
         }
 
+        // Filter by amount range
+        if ($request->has('amount_from') && $request->amount_from) {
+            $query->where('transaction_amount', '>=', $request->amount_from);
+        }
+
+        if ($request->has('amount_to') && $request->amount_to) {
+            $query->where('transaction_amount', '<=', $request->amount_to);
+        }
+
+        // Filter by staff member
+        if ($request->has('staff_id') && $request->staff_id) {
+            $query->where(function($q) use ($request) {
+                $q->where('add_by', $request->staff_id)
+                    ->orWhere('approved_by', $request->staff_id);
+            });
+        }
 
         return $query;
-
-
     }
+
     private function getAppliedFilters(Request $request)
     {
         $filters = [];
         $filterKeys = [
-            'search', 'status', 'points_min', 'points_max',
-            'date_from', 'date_to', 'gender'
+            'search', 'status', 'type', 'date', 'date_from', 'date_to',
+            'location', 'customer_id', 'amount_from', 'amount_to', 'staff_id'
         ];
 
         foreach ($filterKeys as $key) {
